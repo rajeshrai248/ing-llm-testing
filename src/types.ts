@@ -282,3 +282,24 @@ export interface DecisionChecklist {
   }>;
   costSensitivity: string[];
 }
+
+export interface NewsItem {
+  broker: string;
+  title: string;
+  summary: string;
+  url: string;
+  date: string | null;
+  source: string;
+}
+
+export interface NewsResponse {
+  status: string;
+  message: string;
+  news_by_broker: Record<string, number>;
+  news_items: NewsItem[];
+  total_scraped: number;
+  brokers_with_news: number;
+  brokers_processed: number;
+  duration_seconds: number;
+  warnings?: Record<string, string>;
+}
