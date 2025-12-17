@@ -137,14 +137,27 @@ export interface NewBrokerResponseFormat {
 
 export interface BrokerRow {
   broker: string;
-  [key: string]: string | number | null;
+  [key: string]: string | number | null | Record<string, any>;
 }
 
 export interface ComparisonTables {
   etfs: BrokerRow[];
   stocks: BrokerRow[];
   bonds: BrokerRow[];
-  notes?: Record<string, any>;
+  notes?: Record<string, string>;
+  calculation_logic?: Record<string, Record<string, Record<string, string>>>;
+  fee_structure_analysis?: Record<string, any>;
+}
+
+export interface CostComparisonResponse {
+  euronext_brussels?: {
+    stocks: BrokerRow[];
+    etfs: BrokerRow[];
+    bonds?: BrokerRow[];
+    calculation_logic?: Record<string, Record<string, Record<string, string>>>;
+    notes?: Record<string, string>;
+  };
+  [key: string]: any;
 }
 
 export type BrokerResponseInput = BrokerApiResponse | NewBrokerResponseFormat;
@@ -170,6 +183,15 @@ export interface AnalysisSection {
 
 export interface BrokerComparison {
   broker: string;
+  badges?: string[];
+  ratings?: {
+    overall: number;
+    fees: number;
+    platform: number;
+  };
+  verdict?: string;
+  uniqueSellingPoint?: string;
+  hidden_costs_note?: string;
   overallRating?: number;
   etfRating?: number;
   stockRating?: number;
@@ -192,9 +214,24 @@ export interface Scenario {
 
 export interface FinancialAnalysis {
   metadata: AnalysisMetadata;
-  executiveSummary: string[];
+  executiveSummary: {
+    headline?: string;
+    points: string[];
+  } | string[];
+  market_analysis?: {
+    title: string;
+    author: string;
+    content_paragraphs: string[];
+  };
+  cheapest_per_scenario?: Record<string, Record<string, { winner: string; cost: number }>>;
+  cheapestPerTier?: CheapestPerTier;
   sections?: AnalysisSection[];
   brokerComparisons?: BrokerComparison[];
+  annualCostSimulation?: Array<{
+    broker: string;
+    passiveInvestorCost: number;
+    activeTraderCost: number;
+  }>;
   scenarios?: Scenario[];
   investmentScenarios?: InvestmentScenario[];
   recommendations?: Recommendations;
@@ -202,6 +239,7 @@ export interface FinancialAnalysis {
   checklist?: DecisionChecklist;
   categoryWinners?: CategoryWinners;
   costComparison?: CostComparison;
+  costEvidence?: CostEvidence;
   disclaimer?: string;
   generatedAt?: Date;
 }
@@ -225,15 +263,30 @@ export interface CategoryWinners {
   };
 }
 
+export interface CostScenario {
+  broker: string;
+  annualCost: number;
+  rank?: number;
+}
+
 export interface CostComparison {
+  passiveInvestor?: CostScenario[];
+  activeTrader?: CostScenario[];
   monthly500ETF?: Array<{
     broker: string;
     annualCost: number;
   }>;
-  activeTrader?: Array<{
-    broker: string;
-    annualCost: number;
-  }>;
+}
+
+export interface CostEvidence {
+  passiveInvestor?: Record<string, string>;
+  activeTrader?: Record<string, string>;
+}
+
+export interface CheapestPerTier {
+  stocks?: Record<string, string>;
+  etfs?: Record<string, string>;
+  bonds?: Record<string, string>;
 }
 
 export interface InvestmentScenario {

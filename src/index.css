@@ -1242,54 +1242,305 @@ a:hover {
   border-radius: 6px;
   font-weight: 600;
   font-size: 0.9rem;
+  cursor: help;
+}
+
+.fee-badge.fee-unavailable {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.15) 0%, rgba(156, 163, 175, 0.08) 100%);
+  color: #6b7280;
+  cursor: default;
+}
+
+.handling-fee-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(248, 113, 113, 0.08) 100%);
+  color: #7f1d1d;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  cursor: help;
+}
+
+.fee-with-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.fee-with-tooltip .tooltip-content {
+  visibility: hidden;
+  position: absolute;
+  z-index: 1000;
+  background-color: #1a2f2a;
+  color: #fff;
+  text-align: left;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  width: max-content;
+  max-width: 300px;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.fee-with-tooltip:hover .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
+.fee-with-tooltip .tooltip-content::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #1a2f2a transparent transparent transparent;
 }
 
 /* Notes Section */
 .notes-section {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);
+  margin: 2rem 0;
+}
+
+.notes-section h2 {
+  margin-top: 0;
+  margin-bottom: 2rem;
+  color: #0f5132;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(22, 163, 74, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.note-item-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 2rem;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(22, 163, 74, 0.1);
+  transition: background 0.2s ease;
+}
+
+.note-item-row:last-child {
+  border-bottom: none;
+}
+
+.note-item-row:hover {
+  background: rgba(22, 163, 74, 0.04);
+}
+
+.note-broker-name {
+  font-weight: 700;
+  color: #0f5132;
+  font-size: 0.95rem;
+  padding-top: 0.25rem;
+}
+
+.note-text-content {
+  color: #4a6b5e;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.note-text-content p {
+  margin: 0.5rem 0;
+}
+
+.note-text-content p:first-child {
+  margin-top: 0;
+}
+
+.note-text-content p:last-child {
+  margin-bottom: 0;
+}
+
+.note-text-content strong {
+  color: #0f5132;
+  font-weight: 600;
+}
+
+/* Cost Highlighting */
+.cost-highlight {
+  font-weight: 700;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}
+
+/* ==========================================
+   FEE STRUCTURE SECTION STYLING
+   ========================================== */
+
+.fee-structure-section {
   background: rgba(255, 255, 255, 0.5);
   padding: 2rem;
   border-radius: 12px;
   border: 1px solid rgba(22, 163, 74, 0.1);
+  margin-top: 2rem;
 }
 
-.notes-section h3 {
+.fee-structure-section h2 {
   margin-top: 0;
   color: #0f5132;
-  font-size: 1.2rem;
+  font-size: 1.5rem;
   margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, #0f5132 0%, #16a34a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.notes-grid {
+.fee-structure-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1.5rem;
 }
 
-.note-card {
+.fee-structure-card {
   background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
   border: 1px solid rgba(22, 163, 74, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.05);
 }
 
-.note-card:hover {
+.fee-structure-card:hover {
   border-color: #16a34a;
-  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.1);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.15);
   transform: translateY(-2px);
 }
 
-.note-card h4 {
-  margin: 0 0 0.75rem;
-  color: #0f5132;
-  font-size: 1rem;
+.fee-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  border-bottom: 2px solid rgba(22, 163, 74, 0.1);
+  padding-bottom: 1rem;
 }
 
-.note-card p {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
+.fee-card-header h3 {
+  margin: 0;
+  color: #0f5132;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.fee-type-badge {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, rgba(52, 211, 153, 0.08) 100%);
+  color: #0f5132;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.fee-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.fee-detail {
+  padding: 1rem;
+  background: rgba(22, 163, 74, 0.05);
+  border-radius: 8px;
+  border-left: 4px solid #16a34a;
+}
+
+.fee-detail strong {
+  color: #0f5132;
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.fee-detail p {
+  margin: 0;
   color: #4a6b5e;
+  font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.market-section {
+  border: 1px solid rgba(22, 163, 74, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  background: rgba(22, 163, 74, 0.02);
+}
+
+.market-section h4 {
+  margin: 0 0 0.75rem;
+  color: #16a34a;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.market-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.market-description,
+.market-example,
+.market-features {
+  margin: 0;
+  color: #4a6b5e;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.market-description {
+  font-style: italic;
+  color: #6b7280;
+}
+
+.market-example strong,
+.market-features strong {
+  color: #0f5132;
+  font-weight: 600;
+}
+
+.special-notes {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
+}
+
+.special-notes p {
+  margin: 0;
+  color: #1e40af;
+  font-size: 0.85rem;
+  line-height: 1.6;
 }
 
 /* ==========================================
@@ -2054,12 +2305,33 @@ a:hover {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid rgba(22, 163, 74, 0.1);
+  flex-wrap: wrap;
 }
 
 .broker-header h3 {
   margin: 0;
   color: #0f5132;
   font-size: 1.25rem;
+  flex: 1 0 100%;
+  margin-bottom: 0.5rem;
+}
+
+.broker-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1 0 100%;
+}
+
+.badge {
+  display: inline-block;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+  color: #1e40af;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .overall-rating {
@@ -2080,6 +2352,9 @@ a:hover {
 
 .rating-breakdown {
   margin: 1rem 0;
+  background: rgba(22, 163, 74, 0.05);
+  padding: 1rem;
+  border-radius: 8px;
 }
 
 .rating-row {
@@ -2088,6 +2363,12 @@ a:hover {
   align-items: center;
   margin: 0.5rem 0;
   font-size: 0.9rem;
+}
+
+.rating-value {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 1rem;
 }
 
 .category {
@@ -2099,6 +2380,16 @@ a:hover {
 .rating-indicator {
   color: #16a34a;
   letter-spacing: 1px;
+}
+
+.broker-verdict {
+  color: #4a6b5e;
+  font-size: 0.9rem;
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: rgba(52, 211, 153, 0.05);
+  border-left: 4px solid #16a34a;
+  border-radius: 4px;
 }
 
 .pros-cons {
@@ -2124,6 +2415,49 @@ a:hover {
   list-style: none;
   padding: 0;
   margin: 0.5rem 0 0;
+}
+
+.pros li, .cons li {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.pros li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #16a34a;
+  font-weight: bold;
+}
+
+.cons li::before {
+  content: "✗";
+  position: absolute;
+  left: 0;
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.unique-selling-point {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
+}
+
+.unique-selling-point strong {
+  color: #1e40af;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.unique-selling-point p {
+  margin: 0;
+  color: #4a6b5e;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .pros li::before {
@@ -2777,4 +3111,388 @@ a:hover {
     padding: 0.3rem 0.6rem;
     font-size: 0.65rem;
   }
+}
+
+/* Market Analysis Section */
+.market-analysis-section {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border-left: 4px solid #3b82f6;
+  padding: 2rem;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.market-analysis-content {
+  line-height: 1.8;
+  color: #4a6b5e;
+}
+
+.market-analysis-paragraph {
+  margin: 1rem 0;
+  text-align: justify;
+  font-size: 0.95rem;
+}
+
+/* Cheapest Per Scenario Section */
+.cheapest-scenario {
+  margin: 2rem 0;
+}
+
+.cheapest-scenarios-wrapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.cheapest-instrument {
+  background: white;
+  border: 2px solid rgba(22, 163, 74, 0.15);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.cheapest-instrument:hover {
+  border-color: #16a34a;
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.15);
+}
+
+.cheapest-instrument h3 {
+  margin: 0 0 1rem;
+  color: #0f5132;
+  font-size: 1.1rem;
+  text-transform: capitalize;
+}
+
+.cheapest-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cheapest-header {
+  display: grid;
+  grid-template-columns: 100px 1fr 120px;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: rgba(22, 163, 74, 0.08);
+  border-bottom: 2px solid rgba(22, 163, 74, 0.15);
+  font-weight: 600;
+  color: #0f5132;
+  font-size: 0.85rem;
+  border-radius: 6px 6px 0 0;
+}
+
+.cheapest-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 120px;
+  gap: 1rem;
+  padding: 0.75rem;
+  align-items: center;
+  border-bottom: 1px solid rgba(22, 163, 74, 0.08);
+  font-size: 0.9rem;
+}
+
+.cheapest-row:last-child {
+  border-bottom: none;
+}
+
+.cheapest-row:hover {
+  background: rgba(22, 163, 74, 0.04);
+}
+
+.col-amount {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.col-winner {
+  color: #0f5132;
+  font-weight: 600;
+}
+
+.col-cost {
+  color: #16a34a;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Cheapest Per Tier Section */
+.cheapest-per-tier {
+  margin: 2rem 0;
+}
+
+.tier-wrapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.tier-section {
+  background: white;
+  border: 2px solid rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.tier-section:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+}
+
+.tier-section h3 {
+  margin: 0 0 1rem;
+  color: #1e40af;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.tier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tier-item {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: rgba(59, 130, 246, 0.04);
+  border-radius: 6px;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.tier-item:hover {
+  background: rgba(59, 130, 246, 0.08);
+  transform: translateX(4px);
+}
+
+.tier-amount {
+  font-weight: 600;
+  color: #3b82f6;
+  font-size: 0.95rem;
+}
+
+.tier-winner {
+  color: #1f2937;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Annual Cost Simulation Section */
+.annual-cost-simulation {
+  margin: 2rem 0;
+}
+
+.simulation-description {
+  color: #6b7280;
+  font-style: italic;
+  margin: 0 0 1.5rem;
+}
+
+.simulation-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  border-radius: 12px;
+  border: 2px solid rgba(22, 163, 74, 0.15);
+  padding-bottom: 80px;
+}
+
+.simulation-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.simulation-table thead {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.08) 0%, rgba(22, 163, 74, 0.04) 100%);
+  border-bottom: 2px solid rgba(22, 163, 74, 0.15);
+}
+
+.simulation-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #0f5132;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.simulation-table th:first-child {
+  width: 30%;
+}
+
+.simulation-table tbody tr {
+  border-bottom: 1px solid rgba(22, 163, 74, 0.08);
+  transition: background 0.2s ease;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+
+.simulation-table tbody tr:hover {
+  background: rgba(22, 163, 74, 0.04);
+}
+
+.simulation-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.simulation-table td {
+  padding: 1rem;
+  font-size: 0.9rem;
+  overflow: visible;
+  position: relative;
+}
+
+.simulation-table .broker-name {
+  color: #0f5132;
+  font-weight: 600;
+}
+
+.simulation-table .cost-cell {
+  text-align: right;
+  font-weight: 500;
+  padding: 1rem;
+}
+
+.simulation-table .passive-cost-wrapper {
+  text-align: right;
+  font-weight: 500;
+  padding: 1rem;
+}
+
+.simulation-table .active-cost-wrapper {
+  text-align: right;
+  font-weight: 500;
+  padding: 1rem;
+}
+
+.cost-tooltip-trigger {
+  cursor: help;
+  position: relative;
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  z-index: 100;
+}
+
+.simulation-table .passive-cost-wrapper .cost-tooltip-trigger {
+  color: #059669;
+}
+
+.simulation-table .passive-cost-wrapper .cost-tooltip-trigger:hover {
+  background-color: rgba(5, 150, 105, 0.1);
+}
+
+.simulation-table .passive-cost-wrapper .cost-tooltip-trigger:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #059669;
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  white-space: normal;
+  max-width: 200px;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+  pointer-events: none;
+  word-wrap: break-word;
+}
+
+.simulation-table .passive-cost-wrapper .cost-tooltip-trigger:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #059669;
+  z-index: 10;
+}
+
+.simulation-table .active-cost-wrapper .cost-tooltip-trigger {
+  color: #d97706;
+}
+
+.simulation-table .active-cost-wrapper .cost-tooltip-trigger:hover {
+  background-color: rgba(217, 119, 6, 0.1);
+}
+
+.simulation-table .active-cost-wrapper .cost-tooltip-trigger:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #d97706;
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  white-space: normal;
+  max-width: 200px;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);
+  pointer-events: none;
+  word-wrap: break-word;
+}
+
+.simulation-table .active-cost-wrapper .cost-tooltip-trigger:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #d97706;
+  z-index: 10;
+}
+
+.trades-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+/* Hidden Costs Note */
+.hidden-costs-note {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border-left: 4px solid #ef4444;
+  border-radius: 6px;
+}
+
+.hidden-costs-note strong {
+  color: #991b1b;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.hidden-costs-note p {
+  margin: 0;
+  color: #4a6b5e;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
