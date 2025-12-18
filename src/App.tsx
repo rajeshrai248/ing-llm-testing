@@ -1,7 +1,17 @@
 ﻿import { useEffect, useState } from "react";
-import { ANALYSIS_CACHE_KEY, COST_COMPARISON_ENDPOINT, FINANCIAL_ANALYSIS_ENDPOINT, REFRESH_ENDPOINT, STORAGE_KEY, NEWS_SCRAPE_ENDPOINT } from "./constants";
+import { ANALYSIS_CACHE_KEY, NEWS_CACHE_KEY, COST_COMPARISON_ENDPOINT, FINANCIAL_ANALYSIS_ENDPOINT, REFRESH_ENDPOINT, STORAGE_KEY, NEWS_SCRAPE_ENDPOINT } from "./constants";
 import { BrokerRow, ComparisonTables, FinancialAnalysis, NewsResponse } from "./types";
 import { makeApiRequest } from "./api";
+
+// Helper: Convert broker object to BrokerRow array
+const convertBrokerObjectToArray = (brokerObj: Record<string, any>): BrokerRow[] => {
+  if (!brokerObj || typeof brokerObj !== 'object') return [];
+  
+  return Object.entries(brokerObj).map(([brokerName, amounts]) => ({
+    broker: brokerName,
+    ...amounts
+  }));
+};
 
 // Helper: Parse fee strings to numbers
 const parseFeeAmount = (feeStr: string | null | number): number => {
@@ -66,6 +76,13 @@ function App() {
         setFinancialAnalysis(cachedAnalysis);
       }
 
+      // Restore cached news if available
+      const newsSerialized = localStorage.getItem(NEWS_CACHE_KEY);
+      if (newsSerialized) {
+        const cachedNews = JSON.parse(newsSerialized) as NewsResponse;
+        setNewsData(cachedNews);
+      }
+
       setLastUpdated(new Date(parsed.timestamp));
       setIsLoading(false);
       return true;
@@ -87,24 +104,18 @@ function App() {
     setIsAnalysisPreparing(true);
     setError(null);
 
+    // If force refresh, clear cache to prevent stale data from being shown
+    if (force) {
+      console.log('Force refresh - clearing cache');
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ANALYSIS_CACHE_KEY);
+      localStorage.removeItem(NEWS_CACHE_KEY);
+    }
+
     try {
-      // Build query params with force flag if provided
-      const forceParam = force ? "?force_refresh=true" : "";
-      const modelParam = "?model=claude-sonnet-4-20250514";
-      const costComparisonParams = force ? `${forceParam}&model=claude-sonnet-4-20250514` : modelParam;
-      
-      // Only call refresh-and-analyze if this is a manual refresh
-      if (isManual) {
-        console.log('Calling refresh-and-analyze endpoint...');
-        await makeApiRequest(`${REFRESH_ENDPOINT}${forceParam}`, {
-          method: 'POST',
-          timeout: 300000  // 5 minutes for analysis
-        });
-      }
-      
       // Fetch cost comparison tables, news, and financial analysis in parallel
       const [costComparisonResponse, newsResponse, analysisResponse] = await Promise.all([
-        makeApiRequest<ComparisonTables>(`${COST_COMPARISON_ENDPOINT}${costComparisonParams}`, {
+        makeApiRequest<ComparisonTables>(`${COST_COMPARISON_ENDPOINT}`, {
           method: 'GET',
           timeout: 120000
         }).catch(err => {
@@ -118,7 +129,7 @@ function App() {
           console.warn("News request failed:", err);
           return null;
         }),
-        makeApiRequest<FinancialAnalysis>(`${FINANCIAL_ANALYSIS_ENDPOINT}${costComparisonParams}`, {
+        makeApiRequest<FinancialAnalysis>(`${FINANCIAL_ANALYSIS_ENDPOINT}`, {
           method: 'GET',
           timeout: 120000
         }).catch(err => {
@@ -135,9 +146,9 @@ function App() {
         if ('euronext_brussels' in costComparisonResponse) {
           const exchangeData = costComparisonResponse.euronext_brussels;
           processedData = {
-            etfs: exchangeData?.etfs || [],
-            stocks: exchangeData?.stocks || [],
-            bonds: exchangeData?.bonds || [],
+            etfs: convertBrokerObjectToArray(exchangeData?.etfs),
+            stocks: convertBrokerObjectToArray(exchangeData?.stocks),
+            bonds: convertBrokerObjectToArray(exchangeData?.bonds),
             notes: exchangeData?.notes || {},
             calculation_logic: exchangeData?.calculation_logic || {},
             fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {}
@@ -145,9 +156,9 @@ function App() {
         } else {
           // Fallback to old format
           processedData = {
-            etfs: costComparisonResponse.etfs || [],
-            stocks: costComparisonResponse.stocks || [],
-            bonds: costComparisonResponse.bonds || [],
+            etfs: convertBrokerObjectToArray(costComparisonResponse.etfs),
+            stocks: convertBrokerObjectToArray(costComparisonResponse.stocks),
+            bonds: convertBrokerObjectToArray(costComparisonResponse.bonds),
             notes: costComparisonResponse.notes || {},
             calculation_logic: (costComparisonResponse as any).calculation_logic || {},
             fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {}
@@ -177,6 +188,7 @@ function App() {
       // Handle news response
       if (newsResponse) {
         setNewsData(newsResponse);
+        localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(newsResponse));
       } else {
         console.warn("News request failed");
       }
@@ -212,10 +224,9 @@ function App() {
 
   useEffect(() => {
     const initializeApp = async () => {
-      const restored = await hydrateFromCache();
-      if (!restored) {
-        fetchComparisonTables(false);
-      }
+      // Always fetch fresh data on page reload - discard cache
+      console.log('Page loaded - fetching fresh data');
+      fetchComparisonTables(false);
     };
     initializeApp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,14 +246,14 @@ function App() {
       // F5 key
       if (event.key === 'F5') {
         event.preventDefault();
-        console.log('F5 pressed - fetching latest data');
-        fetchComparisonTables(false, false);
+        console.log('F5 pressed - fetching fresh data with refresh');
+        fetchComparisonTables(true, true);  // true, true = manual refresh with force
       }
       // Ctrl+R (Windows/Linux) or Cmd+R (Mac)
       if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
         event.preventDefault();
-        console.log('Ctrl+R/Cmd+R pressed - fetching latest data');
-        fetchComparisonTables(false, false);
+        console.log('Ctrl+R/Cmd+R pressed - fetching fresh data with refresh');
+        fetchComparisonTables(true, true);  // true, true = manual refresh with force
       }
     };
 
@@ -262,6 +273,9 @@ function App() {
     if (instrumentType === 'bonds') {
       filteredByBroker = rows.filter(row => row.broker !== 'Revolut' && row.broker !== 'Degiro Belgium');
     }
+
+    // Safety check: ensure we have rows and can access the first one
+    if (!filteredByBroker || filteredByBroker.length === 0) return null;
 
     const amounts = Object.keys(filteredByBroker[0])
       .filter((k) => k !== "broker")
@@ -1089,8 +1103,8 @@ function App() {
       {comparisonTables && activeTab === "tables" && (
         <>
         <section className="tables-section">
-          {renderComparisonTable(comparisonTables.etfs, "📈 ETFs Comparison", "etfs")}
-          {renderComparisonTable(comparisonTables.stocks, "📉 Stocks Comparison", "stocks")}
+          {comparisonTables.etfs && renderComparisonTable(comparisonTables.etfs, "📈 ETFs Comparison", "etfs")}
+          {comparisonTables.stocks && renderComparisonTable(comparisonTables.stocks, "📉 Stocks Comparison", "stocks")}
 
           {comparisonTables.notes && Object.keys(comparisonTables.notes).length > 0 && (
             <section className="notes-section">

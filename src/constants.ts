@@ -22,6 +22,7 @@ const API_BASE_URL = getApiBaseUrl();
 const API_PATH = '/api';
 
 export const ANALYSIS_CACHE_KEY = "analysisCache";
+export const NEWS_CACHE_KEY = "newsCache";
 export const HEALTH_ENDPOINT = `${API_BASE_URL}${API_PATH}/health`;
 export const BROKERS_ENDPOINT = `${API_BASE_URL}${API_PATH}/brokers`;
 export const BROKER_FEES_ENDPOINT = (brokerName: string) => `${API_BASE_URL}${API_PATH}/brokers/${encodeURIComponent(brokerName)}/fees`;
