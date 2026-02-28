@@ -2,20 +2,26 @@
 const getApiBaseUrl = (): string => {
   // Check environment variables first (for .env configuration)
   const envHost = import.meta.env.VITE_API_HOST;
-  const envPort = import.meta.env.VITE_API_PORT || 8000;
-  const envProtocol = import.meta.env.VITE_API_PROTOCOL || 'http';
-
+  
   // If host is explicitly configured in .env, use it
   if (envHost) {
+    const envPort = import.meta.env.VITE_API_PORT || 8000;
+    const envProtocol = import.meta.env.VITE_API_PROTOCOL || 'http';
     return `${envProtocol}://${envHost}:${envPort}`;
   }
 
-  // Otherwise, auto-detect based on current hostname
+  // For deployed environments, use relative paths (nginx will proxy them)
+  // This avoids CORS issues and loopback access restrictions
   const hostname = window.location.hostname;
-  const protocol = window.location.protocol;
   
-  // Use port 8000 for the backend API
-  return `${protocol}//${hostname}:${envPort}`;
+  // If deployed to public domain, use relative paths for nginx proxy
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return '';
+  }
+  
+  // For local development, use localhost:8000
+  const protocol = window.location.protocol;
+  return `${protocol}//localhost:8000`;
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -33,8 +39,7 @@ export const VALIDATE_ENDPOINT = `${API_BASE_URL}${API_PATH}/validate`;
 export const REPORTS_ENDPOINT = `${API_BASE_URL}${API_PATH}/reports`;
 
 // News endpoints
-// Use relative paths so nginx can proxy to backend
-export const NEWS_SCRAPE_ENDPOINT = `/news/scrape`;
+export const NEWS_SCRAPE_ENDPOINT = `${API_BASE_URL}/news/scrape`;
 export const NEWS_ENDPOINT = `${API_BASE_URL}${API_PATH}/news`;
 export const NEWS_BROKER_ENDPOINT = (brokerName: string) => `${API_BASE_URL}${API_PATH}/news/broker/${encodeURIComponent(brokerName)}`;
 export const NEWS_RECENT_ENDPOINT = `${API_BASE_URL}${API_PATH}/news/recent`;
@@ -42,11 +47,13 @@ export const NEWS_STATISTICS_ENDPOINT = `${API_BASE_URL}${API_PATH}/news/statist
 
 export const STORAGE_KEY = "brokerData";
 
+// Chat endpoint
+export const CHAT_ENDPOINT = `${API_BASE_URL}/chat`;
+
 // Legacy endpoints - kept for backwards compatibility during migration
-// Use relative paths so nginx can proxy to backend
-export const COST_COMPARISON_ENDPOINT = `/cost-comparison-tables`;
-export const FINANCIAL_ANALYSIS_ENDPOINT = `/financial-analysis`;
-export const REFRESH_ENDPOINT = `/refresh-and-analyze`;
+export const COST_COMPARISON_ENDPOINT = `${API_BASE_URL}/cost-comparison-tables`;
+export const FINANCIAL_ANALYSIS_ENDPOINT = `${API_BASE_URL}/financial-analysis`;
+export const REFRESH_ENDPOINT = `${API_BASE_URL}/refresh-and-analyze`;
 
 // Log the API base URL in development
 if (import.meta.env.DEV) {

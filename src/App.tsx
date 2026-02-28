@@ -1,12 +1,15 @@
-﻿import { useEffect, useState } from "react";
+﻿import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { ANALYSIS_CACHE_KEY, NEWS_CACHE_KEY, COST_COMPARISON_ENDPOINT, FINANCIAL_ANALYSIS_ENDPOINT, REFRESH_ENDPOINT, STORAGE_KEY, NEWS_SCRAPE_ENDPOINT } from "./constants";
-import { BrokerRow, ComparisonTables, FinancialAnalysis, NewsResponse } from "./types";
+import { BrokerRow, ComparisonTables, FinancialAnalysis, NewsResponse, PersonaBrokerResult, PersonaDefinition } from "./types";
 import { makeApiRequest } from "./api";
+import NewsRoom from "./NewsRoom";
+import ChatBot from "./ChatBot";
 
 // Helper: Convert broker object to BrokerRow array
 const convertBrokerObjectToArray = (brokerObj: Record<string, any>): BrokerRow[] => {
   if (!brokerObj || typeof brokerObj !== 'object') return [];
-  
+
   return Object.entries(brokerObj).map(([brokerName, amounts]) => ({
     broker: brokerName,
     ...amounts
@@ -33,7 +36,7 @@ const mapBrokerName = (brokerName: string): string => {
 const highlightCosts = (text: string): React.ReactNode => {
   // Pattern to match € amounts, percentages, and fees
   const parts = text.split(/(\€[0-9.,]+(?:\/[a-z]+)?|[0-9]+(?:\.[0-9]+)?%)/gi);
-  
+
   return parts.map((part, idx) => {
     if (/(\€[0-9.,]+(?:\/[a-z]+)?|[0-9]+(?:\.[0-9]+)?%)/.test(part)) {
       return (
@@ -47,6 +50,7 @@ const highlightCosts = (text: string): React.ReactNode => {
 };
 
 function App() {
+  const { t, i18n } = useTranslation();
   const [comparisonTables, setComparisonTables] = useState<ComparisonTables | null>(null);
   const [financialAnalysis, setFinancialAnalysis] = useState<FinancialAnalysis | null>(null);
   const [newsData, setNewsData] = useState<NewsResponse | null>(null);
@@ -57,11 +61,106 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPendingRequest, setIsPendingRequest] = useState(false);
-  const [activeTab, setActiveTab] = useState<"tables" | "analysis">("tables");
+  const [activeTab, setActiveTab] = useState<"tables" | "analysis" | "news">("tables");
+  const [activePersona, setActivePersona] = useState<string>("");
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+  };
+
+  // Language-aware cache key for cost comparison data
+  const storageKey = `${STORAGE_KEY}_${i18n.language}`;
+
+  // Re-fetch data when language changes (cost tables have localized notes/personas, analysis is LLM-generated)
+  const refetchLLMData = useCallback(async () => {
+    console.log(`Re-fetching data for language: ${i18n.language}`);
+    setIsAnalysisPreparing(true);
+    try {
+      const [costComparisonResponse, analysisResponse] = await Promise.all([
+        makeApiRequest<ComparisonTables>(`${COST_COMPARISON_ENDPOINT}`, {
+          method: 'GET',
+          timeout: 120000
+        }).catch(err => {
+          console.warn("Cost comparison re-fetch failed:", err);
+          return null;
+        }),
+        makeApiRequest<FinancialAnalysis>(
+          `${FINANCIAL_ANALYSIS_ENDPOINT}?force=true`, {
+            method: 'GET',
+            timeout: 120000
+          }
+        ).catch(err => {
+          console.warn("Financial analysis re-fetch failed:", err);
+          return null;
+        })
+      ]);
+
+      if (costComparisonResponse && 'euronext_brussels' in costComparisonResponse) {
+        const exchangeData = costComparisonResponse.euronext_brussels;
+        const processedData: ComparisonTables = {
+          etfs: convertBrokerObjectToArray(exchangeData?.etfs),
+          stocks: convertBrokerObjectToArray(exchangeData?.stocks),
+          bonds: convertBrokerObjectToArray(exchangeData?.bonds),
+          notes: exchangeData?.notes || {},
+          calculation_logic: exchangeData?.calculation_logic || {},
+          fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {},
+          investor_personas: exchangeData?.investor_personas || {},
+          persona_definitions: exchangeData?.persona_definitions || {},
+        };
+        setComparisonTables(processedData);
+        localStorage.setItem(storageKey, JSON.stringify({
+          timestamp: new Date().toISOString(),
+          data: processedData
+        }));
+      }
+
+      if (analysisResponse) {
+        setFinancialAnalysis(analysisResponse);
+        localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify({
+          timestamp: new Date().toISOString(),
+          lang: i18n.language,
+          data: analysisResponse
+        }));
+      }
+    } catch (err) {
+      console.warn("Language re-fetch failed:", err);
+    } finally {
+      setIsAnalysisPreparing(false);
+    }
+  }, [i18n.language]);
+
+  // Update document lang attribute and re-fetch data when language changes
+  const prevLangRef = useRef(i18n.language);
+  useEffect(() => {
+    document.documentElement.lang = i18n.language;
+    // Re-fetch data when language changes (not on initial mount)
+    if (prevLangRef.current !== i18n.language) {
+      prevLangRef.current = i18n.language;
+      console.log(`Language changed to ${i18n.language} - re-fetching data`);
+
+      // Try to hydrate from language-specific cache first
+      const cachedKey = `${STORAGE_KEY}_${i18n.language}`;
+      const cached = localStorage.getItem(cachedKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setComparisonTables(parsed.data);
+          console.log(`Hydrated ${i18n.language} data from cache`);
+        } catch (e) {
+          console.warn("Failed to parse cached data:", e);
+        }
+      }
+
+      // Fetch fresh data (will update state when complete)
+      refetchLLMData();
+    }
+  }, [i18n.language, refetchLLMData]);
+
+  const currentLocale = i18n.language === 'fr-be' ? 'fr-BE' : i18n.language === 'nl-be' ? 'nl-BE' : 'en-GB';
 
   const hydrateFromCache = async () => {
     try {
-      const serialized = localStorage.getItem(STORAGE_KEY);
+      const serialized = localStorage.getItem(storageKey);
       if (!serialized) return false;
       const parsed = JSON.parse(serialized) as {
         timestamp: string;
@@ -107,7 +206,7 @@ function App() {
     // If force refresh, clear cache to prevent stale data from being shown
     if (force) {
       console.log('Force refresh - clearing cache');
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey);
       localStorage.removeItem(ANALYSIS_CACHE_KEY);
       localStorage.removeItem(NEWS_CACHE_KEY);
     }
@@ -141,7 +240,7 @@ function App() {
       // Handle the new response structure with euronext_brussels wrapper
       if (costComparisonResponse) {
         let processedData: ComparisonTables;
-        
+
         // Check if response has euronext_brussels structure (new format)
         if ('euronext_brussels' in costComparisonResponse) {
           const exchangeData = costComparisonResponse.euronext_brussels;
@@ -151,7 +250,9 @@ function App() {
             bonds: convertBrokerObjectToArray(exchangeData?.bonds),
             notes: exchangeData?.notes || {},
             calculation_logic: exchangeData?.calculation_logic || {},
-            fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {}
+            fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {},
+            investor_personas: exchangeData?.investor_personas || {},
+            persona_definitions: exchangeData?.persona_definitions || {},
           };
         } else {
           // Fallback to old format
@@ -161,13 +262,15 @@ function App() {
             bonds: convertBrokerObjectToArray(costComparisonResponse.bonds),
             notes: costComparisonResponse.notes || {},
             calculation_logic: (costComparisonResponse as any).calculation_logic || {},
-            fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {}
+            fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {},
+            investor_personas: (costComparisonResponse as any).investor_personas || {},
+            persona_definitions: (costComparisonResponse as any).persona_definitions || {},
           };
         }
-        
+
         setComparisonTables(processedData);
         setLastUpdated(new Date());
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        localStorage.setItem(storageKey, JSON.stringify({
           timestamp: new Date().toISOString(),
           data: processedData
         }));
@@ -268,10 +371,10 @@ function App() {
   const renderComparisonTable = (rows: BrokerRow[], title: string, instrumentType: 'etfs' | 'stocks' | 'bonds' = 'etfs') => {
     if (!rows || rows.length === 0) return null;
 
-    // Filter out Revolut and Degiro Belgium for bonds section
+    // Filter out Revolut for bonds section
     let filteredByBroker = rows;
     if (instrumentType === 'bonds') {
-      filteredByBroker = rows.filter(row => row.broker !== 'Revolut' && row.broker !== 'Degiro Belgium');
+      filteredByBroker = rows.filter(row => row.broker !== 'Revolut');
     }
 
     // Safety check: ensure we have rows and can access the first one
@@ -281,22 +384,17 @@ function App() {
       .filter((k) => k !== "broker")
       .sort((a, b) => parseInt(a) - parseInt(b));
 
-    // Filter out rows where all values are 0 or null
+    // Filter out rows where all values are null (broker doesn't offer this instrument)
+    // A value of 0 is valid (means free) - only null means unavailable
     const filteredRows = filteredByBroker.filter((row) => {
       return amounts.some((amount) => {
         const value = row[amount];
-        if (value === null) return false;
-        
-        // Handle both old format (string/number) and new format (object with total_cost)
+        if (value === null || value === undefined) return false;
         if (typeof value === 'object' && value !== null && 'total_cost' in value) {
-          const totalCost = (value as any).total_cost;
-          const parsed = parseFeeAmount(totalCost);
-          return parsed !== 0;
+          return true; // Has structured data, keep it
         }
-        
         if (typeof value === 'object') return false;
-        const parsed = parseFeeAmount(value as string | number);
-        return parsed !== 0;
+        return true; // Keep any non-null value including 0
       });
     });
 
@@ -324,6 +422,20 @@ function App() {
       return parseFeeAmount(value);
     };
 
+    // Compute cheapest (minimum) cost per amount column across all non-null rows
+    const cheapestPerAmount: Record<string, number> = {};
+    amounts.forEach((amount) => {
+      let min = Infinity;
+      sortedRows.forEach((row) => {
+        const value = row[amount];
+        if (value !== null && value !== undefined) {
+          const cost = getTotalCost(value);
+          if (cost < min) min = cost;
+        }
+      });
+      if (min !== Infinity) cheapestPerAmount[amount] = min;
+    });
+
     // Helper to extract handling fee from value
     const getHandlingFee = (value: any): number => {
       if (typeof value === 'object' && 'handling_fee' in value) {
@@ -334,14 +446,34 @@ function App() {
 
     return (
       <div className="table-container">
-        <h3 className="table-title">{title}</h3>
+        <div className="table-header-wrapper">
+          <div className="table-header-title-group">
+            <h3 className="table-title">{title}</h3>
+            {instrumentType !== 'bonds' && (
+              <p className="table-subtitle">{t('table.transactionFeesSubtitle')}</p>
+            )}
+          </div>
+          <div className="table-info-icon" title={t('table.howToRead')}>
+            <span className="info-icon-button">
+              <span className="info-icon-text">ℹ</span>
+            </span>
+            <div className="info-tooltip">
+              <strong>{t('table.howToReadTitle')}</strong>
+              <p>{t('table.howToReadDescription')}</p>
+            </div>
+          </div>
+        </div>
         <div className="table-responsive">
           <table className="comparison-table">
             <thead>
               <tr>
-                <th className="broker-col">Broker</th>
+                <th className="broker-col">{t('table.broker')}</th>
                 {amounts.map((amount) => (
-                  <th key={amount} className="amount-col">
+                  <th
+                    key={amount}
+                    className="amount-col"
+                    title={t('table.amountTooltip', { amount })}
+                  >
                     €{amount}
                   </th>
                 ))}
@@ -359,18 +491,19 @@ function App() {
                     const totalCost = getTotalCost(value);
                     const handlingFee = getHandlingFee(value);
                     const calculation = getCalculationLogic(row.broker, amount);
-                    
+                    const isCheapest = !isNull && cheapestPerAmount[amount] !== undefined && totalCost === cheapestPerAmount[amount];
+
                     return (
                       <td key={amount} className="amount-col">
                         {isNull ? (
-                          <span className="fee-badge fee-unavailable">N/A</span>
+                          <span className="fee-badge fee-unavailable">{t('table.na')}</span>
                         ) : (
                           <div className="fee-with-tooltip">
-                            <span className="fee-badge" title={calculation || 'No details available'}>
+                            <span className={`fee-badge${isCheapest ? ' fee-cheapest' : ''}`} title={calculation || t('table.noDetails')}>
                               €{totalCost.toFixed(2)}
                             </span>
                             {handlingFee > 0 && (
-                              <span className="handling-fee-badge" title="Includes handling fee">
+                              <span className="handling-fee-badge" title={t('table.handlingFee')}>
                                 +€{handlingFee.toFixed(2)}
                               </span>
                             )}
@@ -393,15 +526,190 @@ function App() {
     );
   };
 
+  const renderInvestorPersonas = () => {
+    const personas = comparisonTables?.investor_personas;
+    const definitions = comparisonTables?.persona_definitions;
+    if (!personas || Object.keys(personas).length === 0) return null;
+
+    const personaKeys = Object.keys(personas);
+    const currentPersona = activePersona || personaKeys[0];
+    const currentDefinition = definitions?.[currentPersona];
+    const currentBrokers = personas[currentPersona] || [];
+
+    // Sort: rank order, but keep ING Self Invest visible
+    const sortedBrokers = [...currentBrokers].sort((a, b) => a.rank - b.rank);
+
+    const personaIcons: Record<string, string> = {
+      passive_investor: "🎯",
+      moderate_investor: "⚖️",
+      active_trader: "⚡",
+    };
+
+    const formatCurrency = (value: number): string => {
+      return `€${value.toFixed(2)}`;
+    };
+
+    return (
+      <section className="persona-section">
+        <h2 className="persona-section-title">👤 {t('personas.title')}</h2>
+        <p className="persona-section-subtitle">{t('personas.subtitle')}</p>
+
+        {/* Persona Tabs */}
+        <div className="persona-tabs">
+          {personaKeys.map((key) => {
+            const def = definitions?.[key];
+            return (
+              <button
+                key={key}
+                className={`persona-tab ${currentPersona === key ? 'active' : ''}`}
+                onClick={() => setActivePersona(key)}
+              >
+                <span className="persona-tab-icon">{personaIcons[key] || "👤"}</span>
+                <span className="persona-tab-name">{def?.name || key.replace(/_/g, ' ')}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Persona Profile Card */}
+        {currentDefinition && (
+          <div className="persona-profile">
+            <div className="persona-profile-header">
+              <span className="persona-profile-icon">{personaIcons[currentPersona] || "👤"}</span>
+              <div>
+                <h3 className="persona-profile-name">{currentDefinition.name}</h3>
+                <p className="persona-profile-desc">{currentDefinition.description}</p>
+              </div>
+            </div>
+            <div className="persona-profile-stats">
+              <div className="persona-stat">
+                <span className="persona-stat-label">{t('personas.portfolioValue')}</span>
+                <span className="persona-stat-value">{formatCurrency(currentDefinition.portfolio_value)}</span>
+              </div>
+              {currentDefinition.trades.map((trade, idx) => (
+                <div key={idx} className="persona-stat">
+                  <span className="persona-stat-label">
+                    {trade.instrument.charAt(0).toUpperCase() + trade.instrument.slice(1)}
+                  </span>
+                  <span className="persona-stat-value">
+                    {trade.count_per_year}x {formatCurrency(trade.amount)}/{t('personas.year')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TCO Comparison Table */}
+        <div className="persona-table-container">
+          <div className="table-responsive">
+            <table className="persona-table">
+              <thead>
+                <tr>
+                  <th className="persona-rank-col">{t('personas.rank')}</th>
+                  <th className="persona-broker-col">{t('table.broker')}</th>
+                  <th>{t('personas.tradingCosts')}</th>
+                  <th>{t('personas.custody')}</th>
+                  <th>{t('personas.connectivity')}</th>
+                  <th>{t('personas.fx')}</th>
+                  <th>{t('personas.dividends')}</th>
+                  <th className="persona-tco-col">{t('personas.totalTCO')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedBrokers.map((broker, idx) => (
+                  <tr
+                    key={broker.broker}
+                    className={`${broker.rank === 1 ? 'persona-winner' : ''} ${idx % 2 === 0 ? 'row-even' : 'row-odd'}`}
+                  >
+                    <td className="persona-rank-col">
+                      {broker.rank === 1 ? (
+                        <span className="persona-rank-badge rank-gold">🏆 {broker.rank}</span>
+                      ) : broker.rank === 2 ? (
+                        <span className="persona-rank-badge rank-silver">🥈 {broker.rank}</span>
+                      ) : broker.rank === 3 ? (
+                        <span className="persona-rank-badge rank-bronze">🥉 {broker.rank}</span>
+                      ) : (
+                        <span className="persona-rank-badge">{broker.rank}</span>
+                      )}
+                    </td>
+                    <td className="persona-broker-col broker-name">
+                      <strong>{mapBrokerName(broker.broker)}</strong>
+                    </td>
+                    <td>
+                      <span className="fee-badge">{formatCurrency(broker.trading_costs)}</span>
+                    </td>
+                    <td>
+                      <span className="fee-badge">{formatCurrency(broker.custody_cost_annual)}</span>
+                    </td>
+                    <td>
+                      <span className="fee-badge">{formatCurrency(broker.connectivity_cost_annual)}</span>
+                    </td>
+                    <td>
+                      <span className="fee-badge">{formatCurrency(broker.fx_cost_annual)}</span>
+                    </td>
+                    <td>
+                      <span className="fee-badge">{formatCurrency(broker.dividend_cost_annual)}</span>
+                    </td>
+                    <td className="persona-tco-col">
+                      <span className={`persona-tco-value ${broker.rank === 1 ? 'tco-winner' : ''}`}>
+                        {formatCurrency(broker.total_annual_tco)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Trading Cost Details (expandable) */}
+        {sortedBrokers.length > 0 && sortedBrokers[0].trading_cost_details && sortedBrokers[0].trading_cost_details.length > 0 && (
+          <div className="tco-breakdown">
+            <h4 className="tco-breakdown-title">{t('personas.costBreakdown')}</h4>
+            <div className="tco-breakdown-grid">
+              {sortedBrokers.filter(b => b.rank <= 3).map((broker) => (
+                <div key={broker.broker} className={`tco-breakdown-card ${broker.rank === 1 ? 'tco-card-winner' : ''}`}>
+                  <div className="tco-breakdown-header">
+                    <strong>{mapBrokerName(broker.broker)}</strong>
+                    <span className="tco-breakdown-total">{formatCurrency(broker.total_annual_tco)}/{t('personas.year')}</span>
+                  </div>
+                  <div className="tco-breakdown-details">
+                    {broker.trading_cost_details.map((detail, idx) => (
+                      <div key={idx} className="tco-detail-row">
+                        <span className="tco-detail-instrument">
+                          {detail.instrument.charAt(0).toUpperCase() + detail.instrument.slice(1)}
+                        </span>
+                        <span className="tco-detail-info">
+                          {detail.count_per_year}x {formatCurrency(detail.amount)} @ {formatCurrency(detail.fee_per_trade)}
+                        </span>
+                        <span className="tco-detail-total">{formatCurrency(detail.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  };
+
   const renderFinancialAnalysis = () => {
     if (isAnalysisPreparing) {
       return (
         <div className="analysis-container">
           <div className="analysis-loading">
-            <h2>📊 Financial Analysis</h2>
+            <h2>📊 {t('analysis.title')}</h2>
             <div className="preparing-message">
-              <p>⏳ Analysis being prepared...</p>
-              <p className="preparing-subtitle">Claude is analyzing the comparison data, please wait</p>
+              <p>⏳ {t('analysis.preparing')}</p>
+              <p className="preparing-subtitle">{t('analysis.preparingSubtitle')}</p>
+              <div className="skeleton-bars">
+                <div className="skeleton-bar skeleton-bar-wide"></div>
+                <div className="skeleton-bar skeleton-bar-medium"></div>
+                <div className="skeleton-bar skeleton-bar-narrow"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -415,8 +723,8 @@ function App() {
       return (
         <div className="analysis-container">
           <div className="analysis-error">
-            <h2>📊 Financial Analysis</h2>
-            <p>⚠️ Analysis data is incomplete. Please try reloading.</p>
+            <h2>📊 {t('analysis.title')}</h2>
+            <p>⚠️ {t('analysis.incomplete')}</p>
           </div>
         </div>
       );
@@ -428,13 +736,13 @@ function App() {
           {/* Header */}
           <div className="analysis-header">
             <div className="analysis-title-wrapper">
-              <h1 className="analysis-main-title">{financialAnalysis.metadata.title || 'Broker Comparison Analysis'}</h1>
-              <h2 className="analysis-vs-title">{financialAnalysis.metadata.subtitle || 'How brokers compare to competitors'}</h2>
+              <h1 className="analysis-main-title">{financialAnalysis.metadata.title || t('analysis.brokerCompAnalysis')}</h1>
+              <h2 className="analysis-vs-title">{financialAnalysis.metadata.subtitle || t('analysis.howBrokersCompare')}</h2>
             </div>
-            <p className="analysis-subtitle">{financialAnalysis.metadata.subtitle || 'Detailed comparison of investment platform fees'}</p>
+            <p className="analysis-subtitle">{financialAnalysis.metadata.subtitle || t('analysis.detailedComparison')}</p>
             <div className="analysis-meta">
-              <span className="meta-item">📅 {financialAnalysis.metadata.publishDate || new Date().toLocaleDateString()}</span>
-              <span className="meta-item">⏱️ {financialAnalysis.metadata.readingTimeMinutes || 5} min read</span>
+              <span className="meta-item">📅 {financialAnalysis.metadata.publishDate || new Date().toLocaleDateString(currentLocale)}</span>
+              <span className="meta-item">⏱️ {t('analysis.minRead', { count: financialAnalysis.metadata.readingTimeMinutes || 5 })}</span>
             </div>
           </div>
 
@@ -444,25 +752,25 @@ function App() {
               💡{' '}
               {typeof financialAnalysis.executiveSummary === 'object' && financialAnalysis.executiveSummary !== null && 'headline' in financialAnalysis.executiveSummary
                 ? (financialAnalysis.executiveSummary as any).headline
-                : 'Executive Summary'}
+                : t('analysis.executiveSummary')}
             </h2>
             <ul className="summary-list">
               {typeof financialAnalysis.executiveSummary === 'object' && financialAnalysis.executiveSummary !== null && 'points' in financialAnalysis.executiveSummary
                 ? (financialAnalysis.executiveSummary as any).points.map((point: string, idx: number) => (
-                    <li key={idx} className="summary-item">{point}</li>
-                  ))
+                  <li key={idx} className="summary-item">{point}</li>
+                ))
                 : Array.isArray(financialAnalysis.executiveSummary)
-                ? (financialAnalysis.executiveSummary as any[]).map((point: string, idx: number) => (
+                  ? (financialAnalysis.executiveSummary as any[]).map((point: string, idx: number) => (
                     <li key={idx} className="summary-item">{point}</li>
                   ))
-                : []}
+                  : []}
             </ul>
           </section>
 
           {/* Key Insights */}
           {typeof financialAnalysis.executiveSummary === 'object' && financialAnalysis.executiveSummary !== null && 'points' in financialAnalysis.executiveSummary && (financialAnalysis.executiveSummary as any).points.length > 0 && (
             <section className="analysis-section key-insights">
-              <h2>🎯 Key Takeaways</h2>
+              <h2>🎯 {t('analysis.keyTakeaways')}</h2>
               <div className="insights-cards">
                 {(financialAnalysis.executiveSummary as any).points.slice(0, 2).map((insight: string, idx: number) => (
                   <div key={idx} className="insight-card">
@@ -545,7 +853,7 @@ function App() {
           {/* Market Analysis */}
           {financialAnalysis.market_analysis && (
             <section className="analysis-section market-analysis-section">
-              <h2>📈 Market Analysis</h2>
+              <h2>📈 {t('analysis.marketAnalysis')}</h2>
               <div className="market-analysis-content">
                 {financialAnalysis.market_analysis.content_paragraphs?.map((paragraph: string, idx: number) => (
                   <p key={idx} className="market-analysis-paragraph">{paragraph}</p>
@@ -557,16 +865,16 @@ function App() {
           {/* Cheapest Per Scenario */}
           {financialAnalysis.cheapest_per_scenario && (
             <section className="analysis-section cheapest-scenario">
-              <h2>🎯 Cheapest Per Scenario</h2>
+              <h2>🎯 {t('analysis.cheapestPerScenario')}</h2>
               <div className="cheapest-scenarios-wrapper">
                 {Object.entries(financialAnalysis.cheapest_per_scenario).map(([instrumentType, amounts]) => (
                   <div key={instrumentType} className="cheapest-instrument">
                     <h3>{instrumentType.charAt(0).toUpperCase() + instrumentType.slice(1)}</h3>
                     <div className="cheapest-table">
                       <div className="cheapest-header">
-                        <span className="col-amount">Amount</span>
-                        <span className="col-winner">Cheapest Broker</span>
-                        <span className="col-cost">Annual Cost</span>
+                        <span className="col-amount">{t('analysis.amount')}</span>
+                        <span className="col-winner">{t('analysis.cheapestBroker')}</span>
+                        <span className="col-cost">{t('analysis.annualCost')}</span>
                       </div>
                       {Object.entries(amounts as Record<string, any>).map(([amount, data]: [string, any]) => (
                         <div key={`${instrumentType}-${amount}`} className="cheapest-row">
@@ -585,11 +893,11 @@ function App() {
           {/* Cheapest Per Tier */}
           {financialAnalysis.cheapestPerTier && (
             <section className="analysis-section cheapest-per-tier">
-              <h2>💰 Cheapest Per Tier</h2>
+              <h2>💰 {t('analysis.cheapestPerTier')}</h2>
               <div className="tier-wrapper">
                 {financialAnalysis.cheapestPerTier.stocks && Object.keys(financialAnalysis.cheapestPerTier.stocks).length > 0 && (
                   <div className="tier-section">
-                    <h3>📉 Stocks</h3>
+                    <h3>📉 {t('analysis.stocks')}</h3>
                     <div className="tier-list">
                       {Object.entries(financialAnalysis.cheapestPerTier.stocks).map(([tier, winner]: [string, any]) => (
                         <div key={`stocks-${tier}`} className="tier-item">
@@ -603,7 +911,7 @@ function App() {
 
                 {financialAnalysis.cheapestPerTier.etfs && Object.keys(financialAnalysis.cheapestPerTier.etfs).length > 0 && (
                   <div className="tier-section">
-                    <h3>📈 ETFs</h3>
+                    <h3>📈 {t('analysis.etfs')}</h3>
                     <div className="tier-list">
                       {Object.entries(financialAnalysis.cheapestPerTier.etfs).map(([tier, winner]: [string, any]) => (
                         <div key={`etfs-${tier}`} className="tier-item">
@@ -617,7 +925,7 @@ function App() {
 
                 {financialAnalysis.cheapestPerTier.bonds && Object.keys(financialAnalysis.cheapestPerTier.bonds).length > 0 && (
                   <div className="tier-section">
-                    <h3>💳 Bonds</h3>
+                    <h3>💳 {t('analysis.bonds')}</h3>
                     <div className="tier-list">
                       {Object.entries(financialAnalysis.cheapestPerTier.bonds).map(([tier, winner]: [string, any]) => (
                         <div key={`bonds-${tier}`} className="tier-item">
@@ -635,15 +943,15 @@ function App() {
           {/* Annual Cost Simulation */}
           {financialAnalysis.annualCostSimulation && (
             <section className="analysis-section annual-cost-simulation">
-              <h2>📊 Annual Cost Simulation</h2>
-              <p className="simulation-description">Cost comparison for different investor types</p>
+              <h2>📊 {t('analysis.annualCostSim')}</h2>
+              <p className="simulation-description">{t('analysis.costForInvestorTypes')}</p>
               <div className="simulation-table-wrapper">
                 <table className="simulation-table">
                   <thead>
                     <tr>
-                      <th>Broker</th>
-                      <th className="passive-col">Passive Investor <span className="trades-label">(12/month)</span></th>
-                      <th className="active-col">Active Trader <span className="trades-label">(120/month)</span></th>
+                      <th>{t('analysis.broker')}</th>
+                      <th className="passive-col">{t('analysis.passiveInvestor')} <span className="trades-label">({t('analysis.tradesPerMonth', { count: 12 })})</span></th>
+                      <th className="active-col">{t('analysis.activeTrader')} <span className="trades-label">({t('analysis.tradesPerMonth', { count: 120 })})</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -680,7 +988,7 @@ function App() {
 
           {/* Broker Comparisons - Adapted for new structure */}
           <section className="analysis-section broker-ratings">
-            <h2>🏆 Broker Comparisons</h2>
+            <h2>🏆 {t('analysis.brokerComparisons')}</h2>
             <div className="ratings-grid">
               {(financialAnalysis.brokerComparisons?.sort((a, b) => {
                 if (a.broker === "ING Self Invest") return -1;
@@ -702,16 +1010,31 @@ function App() {
                   {broker.ratings && (
                     <div className="rating-breakdown">
                       <div className="rating-row">
-                        <span className="category">Overall:</span>
-                        <span className="rating-value">{broker.ratings.overall || 0}/5</span>
+                        <span className="category">{t('analysis.overall')}:</span>
+                        <div className="rating-bar-wrapper">
+                          <div className="rating-bar-container">
+                            <div className="rating-bar-fill" style={{ width: `${((broker.ratings.overall || 0) / 5) * 100}%` }}></div>
+                          </div>
+                          <span className="rating-label">{broker.ratings.overall || 0}/5</span>
+                        </div>
                       </div>
                       <div className="rating-row">
-                        <span className="category">Fees:</span>
-                        <span className="rating-value">{broker.ratings.fees || 0}/5</span>
+                        <span className="category">{t('analysis.fees')}:</span>
+                        <div className="rating-bar-wrapper">
+                          <div className="rating-bar-container">
+                            <div className="rating-bar-fill" style={{ width: `${((broker.ratings.fees || 0) / 5) * 100}%` }}></div>
+                          </div>
+                          <span className="rating-label">{broker.ratings.fees || 0}/5</span>
+                        </div>
                       </div>
                       <div className="rating-row">
-                        <span className="category">Platform:</span>
-                        <span className="rating-value">{broker.ratings.platform || 0}/5</span>
+                        <span className="category">{t('analysis.platform')}:</span>
+                        <div className="rating-bar-wrapper">
+                          <div className="rating-bar-container">
+                            <div className="rating-bar-fill" style={{ width: `${((broker.ratings.platform || 0) / 5) * 100}%` }}></div>
+                          </div>
+                          <span className="rating-label">{broker.ratings.platform || 0}/5</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -723,7 +1046,7 @@ function App() {
                   <div className="pros-cons">
                     {broker.pros && (
                       <div className="pros">
-                        <strong>✓ Pros</strong>
+                        <strong>✓ {t('analysis.pros')}</strong>
                         <ul>
                           {broker.pros.map((pro: string, idx: number) => <li key={idx}>{pro}</li>)}
                         </ul>
@@ -731,7 +1054,7 @@ function App() {
                     )}
                     {broker.cons && (
                       <div className="cons">
-                        <strong>✗ Cons</strong>
+                        <strong>✗ {t('analysis.cons')}</strong>
                         <ul>
                           {broker.cons.map((con: string, idx: number) => <li key={idx}>{con}</li>)}
                         </ul>
@@ -741,14 +1064,14 @@ function App() {
 
                   {broker.uniqueSellingPoint && (
                     <div className="unique-selling-point">
-                      <strong>💡 USP:</strong>
+                      <strong>💡 {t('analysis.usp')}:</strong>
                       <p>{broker.uniqueSellingPoint}</p>
                     </div>
                   )}
 
                   {broker.hidden_costs_note && (
                     <div className="hidden-costs-note">
-                      <strong>⚠️ Hidden Costs:</strong>
+                      <strong>⚠️ {t('analysis.hiddenCosts')}:</strong>
                       <p>{broker.hidden_costs_note}</p>
                     </div>
                   )}
@@ -760,26 +1083,26 @@ function App() {
           {/* Category Winners - Adapted for new structure */}
           {financialAnalysis.categoryWinners && (
             <section className="analysis-section recommendations">
-              <h2>✨ Category Winners</h2>
+              <h2>✨ {t('analysis.categoryWinners')}</h2>
               <div className="winners-list">
                 <div className="winner-card">
-                  <h3>Best for ETFs</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.etfs?.winner || 'N/A'}</p>
+                  <h3>{t('analysis.bestForEtfs')}</h3>
+                  <p className="winner-name">{financialAnalysis.categoryWinners.etfs?.winner || t('table.na')}</p>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.etfs?.reason || ''}</p>
                 </div>
                 <div className="winner-card">
-                  <h3>Best for Stocks</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.stocks?.winner || 'N/A'}</p>
+                  <h3>{t('analysis.bestForStocks')}</h3>
+                  <p className="winner-name">{financialAnalysis.categoryWinners.stocks?.winner || t('table.na')}</p>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.stocks?.reason || ''}</p>
                 </div>
                 <div className="winner-card">
-                  <h3>Best for Bonds</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.bonds?.winner || 'N/A'}</p>
+                  <h3>{t('analysis.bestForBonds')}</h3>
+                  <p className="winner-name">{financialAnalysis.categoryWinners.bonds?.winner || t('table.na')}</p>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.bonds?.reason || ''}</p>
                 </div>
                 <div className="winner-card">
-                  <h3>Best Overall</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.overall?.winner || 'N/A'}</p>
+                  <h3>{t('analysis.bestForOverall')}</h3>
+                  <p className="winner-name">{financialAnalysis.categoryWinners.overall?.winner || t('table.na')}</p>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.overall?.reason || ''}</p>
                 </div>
               </div>
@@ -789,13 +1112,13 @@ function App() {
           {/* Cost Comparison Scenarios */}
           {financialAnalysis.costComparison && (
             <section className="analysis-section investment-scenarios">
-              <h2>💰 Cost Comparison Scenarios</h2>
+              <h2>💰 {t('analysis.costScenarios')}</h2>
               <div className="scenarios-grid">
                 {/* Passive Investor */}
                 {financialAnalysis.costComparison.passiveInvestor && (
                   <div className="scenario-card">
-                    <h3>🎯 Passive Investor</h3>
-                    <p className="scenario-profile">Monthly €500 ETF investment (12 trades/year)</p>
+                    <h3>🎯 {t('analysis.passiveInvestor')}</h3>
+                    <p className="scenario-profile">{t('analysis.passiveProfile')}</p>
                     <div className="scenario-costs">
                       {financialAnalysis.costComparison.passiveInvestor
                         .sort((a, b) => a.annualCost - b.annualCost)
@@ -815,8 +1138,8 @@ function App() {
                 {/* Active Trader */}
                 {financialAnalysis.costComparison.activeTrader && (
                   <div className="scenario-card">
-                    <h3>⚡ Active Trader</h3>
-                    <p className="scenario-profile">High-frequency trading (120 trades/year)</p>
+                    <h3>⚡ {t('analysis.activeTrader')}</h3>
+                    <p className="scenario-profile">{t('analysis.activeProfile')}</p>
                     <div className="scenario-costs">
                       {financialAnalysis.costComparison.activeTrader
                         .sort((a, b) => a.annualCost - b.annualCost)
@@ -836,8 +1159,8 @@ function App() {
                 {/* Fallback to old format */}
                 {!financialAnalysis.costComparison.passiveInvestor && financialAnalysis.costComparison.monthly500ETF && (
                   <div className="scenario-card">
-                    <h3>🎯 Monthly €500 ETF Investor</h3>
-                    <p className="scenario-profile">Investing €500/month in ETFs</p>
+                    <h3>🎯 {t('analysis.monthly500ETF')}</h3>
+                    <p className="scenario-profile">{t('analysis.investing500Monthly')}</p>
                     <div className="scenario-costs">
                       {financialAnalysis.costComparison.monthly500ETF?.sort((a, b) => {
                         if (a.broker === "ING Self Invest") return -1;
@@ -856,8 +1179,8 @@ function App() {
                 {/* Old format activeTrader fallback */}
                 {!financialAnalysis.costComparison.activeTrader && financialAnalysis.costComparison.monthly500ETF && (
                   <div className="scenario-card">
-                    <h3>⚡ Active Trader</h3>
-                    <p className="scenario-profile">High-frequency trading across markets</p>
+                    <h3>⚡ {t('analysis.activeTrader')}</h3>
+                    <p className="scenario-profile">{t('analysis.activeTraderProfile')}</p>
                     <div className="scenario-costs">
                       {financialAnalysis.costComparison.activeTrader?.sort((a, b) => {
                         if (a.broker === "ING Self Invest") return -1;
@@ -886,7 +1209,7 @@ function App() {
           {/* Disclaimer */}
           <section className="analysis-section disclaimer-section">
             <p className="disclaimer">
-              ⚠️ <strong>Disclaimer:</strong> {financialAnalysis.disclaimer || 'Fee information based on publicly available data and may change. Always verify current rates with brokers directly before making investment decisions.'}
+              ⚠️ <strong>{t('analysis.disclaimer')}:</strong> {financialAnalysis.disclaimer || t('analysis.disclaimerDefault')}
             </p>
           </section>
         </article>
@@ -896,12 +1219,12 @@ function App() {
 
   const renderNewsFlashes = () => {
     const hasNews = newsData && newsData.news_items && newsData.news_items.length > 0;
-    
+
     // Get unique brokers from news data
-    const allBrokers = hasNews 
+    const allBrokers = hasNews
       ? [...new Set(newsData.news_items.map(item => item.broker))].sort()
       : [];
-    
+
     if (!hasNews) {
       return (
         <div className="news-ticker-container">
@@ -909,10 +1232,10 @@ function App() {
           <div className="ticker-header">
             <div className="ticker-label">
               <span className="breaking-icon">📰</span>
-              <span className="breaking-text">MARKET NEWS</span>
+              <span className="breaking-text">{t('news.marketNews')}</span>
             </div>
             <div className="ticker-stats">
-              <span>No news available at the moment</span>
+              <span>{t('news.noNewsAvailable')}</span>
             </div>
           </div>
 
@@ -923,21 +1246,21 @@ function App() {
                 <div className="ticker-ribbon">
                   <span className="ribbon-broker">NEWS</span>
                 </div>
-                <span className="empty-message">No news items available at the moment • Check back soon for the latest market updates</span>
+                <span className="empty-message">{t('news.emptyMessage')}</span>
               </div>
             </div>
           </div>
 
           {/* Footer Info */}
           <div className="ticker-footer">
-            <p>News items are automatically scraped and updated. Check back soon for updates.</p>
+            <p>{t('news.autoScraped')}</p>
           </div>
         </div>
       );
     }
 
     // Filter news based on selected brokers
-    const filteredNews = newsData.news_items.filter(item => 
+    const filteredNews = newsData.news_items.filter(item =>
       selectedNewsBrokers.includes(item.broker)
     );
 
@@ -954,17 +1277,17 @@ function App() {
         <div className="ticker-header">
           <div className="ticker-label">
             <span className="breaking-icon">📰</span>
-            <span className="breaking-text">MARKET NEWS</span>
+            <span className="breaking-text">{t('news.marketNews')}</span>
           </div>
           <div className="ticker-filters">
-            <label className="filter-label">Filter by Broker:</label>
+            <label className="filter-label">{t('news.filterByBroker')}</label>
             <div className="broker-filter-chips">
               {allBrokers.map((broker) => (
                 <button
                   key={broker}
                   className={`filter-chip ${selectedNewsBrokers.includes(broker) ? 'active' : ''}`}
                   onClick={() => {
-                    setSelectedNewsBrokers(prev => 
+                    setSelectedNewsBrokers(prev =>
                       prev.includes(broker)
                         ? prev.filter(b => b !== broker)
                         : [...prev, broker]
@@ -977,7 +1300,7 @@ function App() {
             </div>
           </div>
           <div className="ticker-stats">
-            <span>{sortedNews.length} articles shown</span>
+            <span>{t('news.articlesShown', { count: sortedNews.length })}</span>
           </div>
         </div>
 
@@ -988,7 +1311,7 @@ function App() {
                 <div className="ticker-ribbon">
                   <span className="ribbon-broker">FILTER</span>
                 </div>
-                <span className="empty-message">No news items match your selected brokers. Try selecting different brokers to see more news.</span>
+                <span className="empty-message">{t('news.noMatch')}</span>
               </div>
             </div>
           </div>
@@ -1001,65 +1324,65 @@ function App() {
                   <div key={idx} className="ticker-item">
                     <div className="ticker-ribbon">
                       <span className="ribbon-broker">{mapBrokerName(item.broker)}</span>
-                </div>
-                <a 
-                  href={item.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="ticker-link"
-                  title={item.title}
-                >
-                  <span className="ticker-title">{item.title}</span>
-                  <span className="ticker-separator">•</span>
-                  <span className="ticker-summary">{item.summary}</span>
-                </a>
+                    </div>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ticker-link"
+                      title={item.title}
+                    >
+                      <span className="ticker-title">{item.title}</span>
+                      <span className="ticker-separator">•</span>
+                      <span className="ticker-summary">{item.summary}</span>
+                    </a>
+                  </div>
+                ))}
+                {/* Duplicate for seamless loop */}
+                {sortedNews.map((item, idx) => (
+                  <div key={`dup-${idx}`} className="ticker-item">
+                    <div className="ticker-ribbon">
+                      <span className="ribbon-broker">{mapBrokerName(item.broker)}</span>
+                    </div>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ticker-link"
+                      title={item.title}
+                    >
+                      <span className="ticker-title">{item.title}</span>
+                      <span className="ticker-separator">•</span>
+                      <span className="ticker-summary">{item.summary}</span>
+                    </a>
+                  </div>
+                ))}
+                {/* Duplicate for seamless loop */}
+                {sortedNews.map((item, idx) => (
+                  <div key={`dup-${idx}`} className="ticker-item">
+                    <div className="ticker-ribbon">
+                      <span className="ribbon-broker">{mapBrokerName(item.broker)}</span>
+                    </div>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ticker-link"
+                      title={item.title}
+                    >
+                      <span className="ticker-title">{item.title}</span>
+                      <span className="ticker-separator">•</span>
+                      <span className="ticker-summary">{item.summary}</span>
+                    </a>
+                  </div>
+                ))}
               </div>
-            ))}
-            {/* Duplicate for seamless loop */}
-            {sortedNews.map((item, idx) => (
-              <div key={`dup-${idx}`} className="ticker-item">
-                <div className="ticker-ribbon">
-                  <span className="ribbon-broker">{mapBrokerName(item.broker)}</span>
-                </div>
-                <a 
-                  href={item.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="ticker-link"
-                  title={item.title}
-                >
-                  <span className="ticker-title">{item.title}</span>
-                  <span className="ticker-separator">•</span>
-                  <span className="ticker-summary">{item.summary}</span>
-                </a>
-              </div>
-            ))}
-            {/* Duplicate for seamless loop */}
-            {sortedNews.map((item, idx) => (
-              <div key={`dup-${idx}`} className="ticker-item">
-                <div className="ticker-ribbon">
-                  <span className="ribbon-broker">{mapBrokerName(item.broker)}</span>
-                </div>
-                <a 
-                  href={item.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="ticker-link"
-                  title={item.title}
-                >
-                  <span className="ticker-title">{item.title}</span>
-                  <span className="ticker-separator">•</span>
-                  <span className="ticker-summary">{item.summary}</span>
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Footer Info */}
-        <div className="ticker-footer">
-          <p>News items are automatically scraped and updated. Click to read full story.</p>
-        </div>
+            {/* Footer Info */}
+            <div className="ticker-footer">
+              <p>{t('news.clickToRead')}</p>
+            </div>
           </>
         )}
       </div>
@@ -1068,149 +1391,183 @@ function App() {
 
   return (
     <main className="page">
-      {/* News Ticker - Top of Page */}
-      {renderNewsFlashes()}
-
-      <header className="page__header">
-        <div>
-          <p className="page__eyebrow">Investment Platform Analysis</p>
-          <h1>Belgian Online Investing Platforms</h1>
-          <p>
-            Compare investment platforms and trading costs across Belgium's most popular online brokers. Discover which platform offers the best fees for your investment strategy—whether you're trading ETFs, individual stocks, or bonds. Data-driven insights to help investors optimize their trading costs.
+      {/* Header with Improved Look and Feel */}
+      <header className="page-header-improved">
+        <div className="header-content">
+          <div className="header-top-row">
+            <p className="header-eyebrow">{t('header.eyebrow')}</p>
+            <div className="language-switcher">
+              <button
+                className={`lang-btn ${i18n.language === 'en' ? 'active' : ''}`}
+                onClick={() => changeLanguage('en')}
+              >
+                EN
+              </button>
+              <button
+                className={`lang-btn ${i18n.language === 'fr-be' ? 'active' : ''}`}
+                onClick={() => changeLanguage('fr-be')}
+              >
+                FR
+              </button>
+              <button
+                className={`lang-btn ${i18n.language === 'nl-be' ? 'active' : ''}`}
+                onClick={() => changeLanguage('nl-be')}
+              >
+                NL
+              </button>
+            </div>
+          </div>
+          <h1 className="header-title">{t('header.title')}</h1>
+          <p className="header-description">
+            {t('header.description')}
           </p>
         </div>
       </header>
 
       {/* Tab Navigation */}
-      {comparisonTables && (
-        <section className="tab-navigation">
-          <button
-            className={`tab-btn ${activeTab === "tables" ? "active" : ""}`}
-            onClick={() => setActiveTab("tables")}
-          >
-            📊 Comparison Tables
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "analysis" ? "active" : ""}`}
-            onClick={() => setActiveTab("analysis")}
-          >
-            💡 Financial Analysis
-          </button>
-        </section>
-      )}
+      <section className="tab-navigation">
+        <button
+          className={`tab-btn ${activeTab === "tables" ? "active" : ""}`}
+          onClick={() => setActiveTab("tables")}
+          disabled={!comparisonTables}
+        >
+          📊 {t('tabs.comparison')}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "analysis" ? "active" : ""}`}
+          onClick={() => setActiveTab("analysis")}
+          disabled={!comparisonTables}
+        >
+          💡 {t('tabs.analysis')}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "news" ? "active" : ""}`}
+          onClick={() => setActiveTab("news")}
+          disabled={!newsData}
+        >
+          📰 {t('tabs.news')}
+        </button>
+      </section>
 
       {/* Content */}
       {comparisonTables && activeTab === "tables" && (
         <>
-        <section className="tables-section">
-          {comparisonTables.etfs && renderComparisonTable(comparisonTables.etfs, "📈 ETFs Comparison", "etfs")}
-          {comparisonTables.stocks && renderComparisonTable(comparisonTables.stocks, "📉 Stocks Comparison", "stocks")}
+          <section className="tables-section">
+            {comparisonTables.etfs && renderComparisonTable(comparisonTables.etfs, `📈 ${t('table.etfsTitle')}`, "etfs")}
+            {comparisonTables.stocks && renderComparisonTable(comparisonTables.stocks, `📉 ${t('table.stocksTitle')}`, "stocks")}
 
-          {comparisonTables.notes && Object.keys(comparisonTables.notes).length > 0 && (
-            <section className="notes-section">
-              <h2>📋 Important Broker Information</h2>
-              <div className="notes-list">
-                {Object.entries(comparisonTables.notes)
+            {comparisonTables.investor_personas && Object.keys(comparisonTables.investor_personas).length > 0 &&
+              renderInvestorPersonas()}
+
+            {comparisonTables.notes && Object.keys(comparisonTables.notes).length > 0 && (
+              <section className="notes-section">
+                <h2>📋 {t('notes.title')}</h2>
+                <div className="notes-list">
+                  {Object.entries(comparisonTables.notes)
+                    .sort((a, b) => {
+                      if (a[0] === "ING Self Invest") return -1;
+                      if (b[0] === "ING Self Invest") return 1;
+                      return 0;
+                    })
+                    .map(([broker, noteContent]) => {
+                      const brokerName = mapBrokerName(broker);
+                      const noteText = typeof noteContent === "string" ? noteContent : "";
+
+                      return (
+                        <div key={broker} className="note-item-row">
+                          <div className="note-broker-name">{brokerName}</div>
+                          <div className="note-text-content">
+                            {typeof noteContent === "string" ? (
+                              <p>{highlightCosts(noteContent)}</p>
+                            ) : typeof noteContent === "object" && noteContent !== null ? (
+                              <div>
+                                {Object.entries(noteContent).map(([key, value]) => (
+                                  <p key={key}>
+                                    <strong>{key}:</strong> {highlightCosts(String(value))}
+                                  </p>
+                                ))}
+                              </div>
+                            ) : (
+                              <p>{String(noteContent)}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </section>
+            )}
+          </section>
+
+          {comparisonTables.fee_structure_analysis && Object.keys(comparisonTables.fee_structure_analysis).length > 0 && (
+            <section className="fee-structure-section">
+              <h2>💰 {t('feeStructure.title')}</h2>
+              <div className="fee-structure-grid">
+                {Object.entries(comparisonTables.fee_structure_analysis)
                   .sort((a, b) => {
                     if (a[0] === "ING Self Invest") return -1;
                     if (b[0] === "ING Self Invest") return 1;
                     return 0;
                   })
-                  .map(([broker, noteContent]) => {
-                    const brokerName = mapBrokerName(broker);
-                    const noteText = typeof noteContent === "string" ? noteContent : "";
-                    
-                    return (
-                      <div key={broker} className="note-item-row">
-                        <div className="note-broker-name">{brokerName}</div>
-                        <div className="note-text-content">
-                          {typeof noteContent === "string" ? (
-                            <p>{highlightCosts(noteContent)}</p>
-                          ) : typeof noteContent === "object" && noteContent !== null ? (
-                            <div>
-                              {Object.entries(noteContent).map(([key, value]) => (
-                                <p key={key}>
-                                  <strong>{key}:</strong> {highlightCosts(String(value))}
-                                </p>
-                              ))}
-                            </div>
-                          ) : (
-                            <p>{String(noteContent)}</p>
-                          )}
-                        </div>
+                  .map(([broker, analysis]: [string, any]) => (
+                    <div key={broker} className="fee-structure-card">
+                      <div className="fee-card-header">
+                        <h3>{mapBrokerName(broker)}</h3>
+                        <span className="fee-type-badge">{analysis.fee_type}</span>
                       </div>
-                    );
-                  })}
+
+                      <div className="fee-card-content">
+                        {analysis.custody_fees && (
+                          <div className="fee-detail">
+                            <strong>{t('feeStructure.custodyFees')}:</strong>
+                            <p>{analysis.custody_fees}</p>
+                          </div>
+                        )}
+
+                        {analysis.markets && Object.entries(analysis.markets).map(([market, details]: [string, any]) => (
+                          <div key={market} className="market-section">
+                            <h4>{market}</h4>
+                            <div className="market-details">
+                              {details.description && (
+                                <p className="market-description">{details.description}</p>
+                              )}
+                              {details.example_fee && (
+                                <p className="market-example"><strong>{t('feeStructure.exampleFee')}:</strong> {details.example_fee}</p>
+                              )}
+                              {details.key_features && (
+                                <p className="market-features"><strong>{t('feeStructure.keyFeatures')}:</strong> {details.key_features}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        {analysis.special_notes && (
+                          <div className="special-notes">
+                            <p><em>💡 {analysis.special_notes}</em></p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
               </div>
             </section>
           )}
-        </section>
-
-        {comparisonTables.fee_structure_analysis && Object.keys(comparisonTables.fee_structure_analysis).length > 0 && (
-          <section className="fee-structure-section">
-            <h2>💰 Fee Structure Analysis</h2>
-            <div className="fee-structure-grid">
-              {Object.entries(comparisonTables.fee_structure_analysis)
-                .sort((a, b) => {
-                  if (a[0] === "ING Self Invest") return -1;
-                  if (b[0] === "ING Self Invest") return 1;
-                  return 0;
-                })
-                .map(([broker, analysis]: [string, any]) => (
-                <div key={broker} className="fee-structure-card">
-                  <div className="fee-card-header">
-                    <h3>{mapBrokerName(broker)}</h3>
-                    <span className="fee-type-badge">{analysis.fee_type}</span>
-                  </div>
-
-                  <div className="fee-card-content">
-                    {analysis.custody_fees && (
-                      <div className="fee-detail">
-                        <strong>Custody Fees:</strong>
-                        <p>{analysis.custody_fees}</p>
-                      </div>
-                    )}
-
-                    {analysis.markets && Object.entries(analysis.markets).map(([market, details]: [string, any]) => (
-                      <div key={market} className="market-section">
-                        <h4>{market}</h4>
-                        <div className="market-details">
-                          {details.description && (
-                            <p className="market-description">{details.description}</p>
-                          )}
-                          {details.example_fee && (
-                            <p className="market-example"><strong>Example Fee:</strong> {details.example_fee}</p>
-                          )}
-                          {details.key_features && (
-                            <p className="market-features"><strong>Key Features:</strong> {details.key_features}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {analysis.special_notes && (
-                      <div className="special-notes">
-                        <p><em>💡 {analysis.special_notes}</em></p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
         </>
       )}
 
       {comparisonTables && activeTab === "analysis" && renderFinancialAnalysis()}
 
+      {activeTab === "news" && newsData && (
+        <NewsRoom newsItems={newsData.news_items || []} />
+      )}
+
       {isLoading && !comparisonTables && (
-        <section className="panel placeholder">⏳ Loading broker comparison data...</section>
+        <section className="panel placeholder">⏳ {t('loading.brokerData')}</section>
       )}
 
       {!isLoading && !comparisonTables && !error && (
         <section className="panel placeholder">
-          🔍 No pricing data available.
+          🔍 {t('empty.noPricing')}
         </section>
       )}
 
@@ -1222,18 +1579,21 @@ function App() {
         </div>
 
         <div className="status-info">
-          {isLoading && !comparisonTables && <span>⏳ Loading cost comparison tables...</span>}
-          {isRefreshing && comparisonTables && <span>🔄 Updating in background...</span>}
+          {isLoading && !comparisonTables && <span>⏳ {t('loading.costTables')}</span>}
+          {isRefreshing && comparisonTables && <span>🔄 {t('loading.updating')}</span>}
           {lastUpdated && !isLoading && !isRefreshing && (
             <span>
-              ✓ Last updated{" "}
-              {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              ✓ {t('loading.lastUpdated')}{" "}
+              {lastUpdated.toLocaleTimeString(currentLocale, { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
         </div>
 
         {error && <p className="error-message">{error}</p>}
       </section>
+
+      {/* ChatBot Popup */}
+      <ChatBot />
     </main>
   );
 }

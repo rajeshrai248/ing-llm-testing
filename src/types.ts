@@ -140,6 +140,37 @@ export interface BrokerRow {
   [key: string]: string | number | null | Record<string, any>;
 }
 
+export interface PersonaTradingDetail {
+  instrument: string;
+  amount: number;
+  count_per_year: number;
+  fee_per_trade: number;
+  total: number;
+}
+
+export interface PersonaBrokerResult {
+  broker: string;
+  trading_costs: number;
+  custody_cost_annual: number;
+  connectivity_cost_annual: number;
+  subscription_cost_annual: number;
+  fx_cost_annual: number;
+  dividend_cost_annual: number;
+  total_annual_tco: number;
+  rank: number;
+  trading_cost_details: PersonaTradingDetail[];
+}
+
+export interface PersonaDefinition {
+  name: string;
+  description: string;
+  portfolio_value: number;
+  exchanges_used: number;
+  fx_volume_annual: number;
+  dividend_income_annual: number;
+  trades: Array<{ instrument: string; amount: number; count_per_year: number }>;
+}
+
 export interface ComparisonTables {
   etfs: BrokerRow[];
   stocks: BrokerRow[];
@@ -147,6 +178,8 @@ export interface ComparisonTables {
   notes?: Record<string, string>;
   calculation_logic?: Record<string, Record<string, Record<string, string>>>;
   fee_structure_analysis?: Record<string, any>;
+  investor_personas?: Record<string, PersonaBrokerResult[]>;
+  persona_definitions?: Record<string, PersonaDefinition>;
 }
 
 export interface CostComparisonResponse {

@@ -1,4 +1,5 @@
 // API utility functions with proper error handling and CORS support
+import i18n from './i18n/i18n';
 
 export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -21,11 +22,17 @@ export const makeApiRequest = async <T>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+  // Append lang query parameter to URL
+  const lang = i18n.language || 'en';
+  const separator = url.includes('?') ? '&' : '?';
+  const urlWithLang = `${url}${separator}lang=${encodeURIComponent(lang)}`;
+
   try {
-    const response = await fetch(url, {
+    const response = await fetch(urlWithLang, {
       method,
       headers: {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
