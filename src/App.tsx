@@ -5,6 +5,7 @@ import { BrokerRow, ComparisonTables, FinancialAnalysis, NewsResponse, PersonaBr
 import { makeApiRequest } from "./api";
 import NewsRoom from "./NewsRoom";
 import ChatBot from "./ChatBot";
+import BrokerLogo from "./BrokerLogo";
 
 // Helper: Convert broker object to BrokerRow array
 const convertBrokerObjectToArray = (brokerObj: Record<string, any>): BrokerRow[] => {
@@ -483,7 +484,7 @@ function App() {
               {sortedRows.map((row, idx) => (
                 <tr key={idx} className={idx % 2 === 0 ? "row-even" : "row-odd"}>
                   <td className="broker-col broker-name">
-                    <strong>{mapBrokerName(row.broker)}</strong>
+                    <span className="broker-name-with-logo"><BrokerLogo broker={row.broker} size="sm" /><strong>{mapBrokerName(row.broker)}</strong></span>
                   </td>
                   {amounts.map((amount) => {
                     const value = row[amount];
@@ -634,7 +635,7 @@ function App() {
                       )}
                     </td>
                     <td className="persona-broker-col broker-name">
-                      <strong>{mapBrokerName(broker.broker)}</strong>
+                      <span className="broker-name-with-logo"><BrokerLogo broker={broker.broker} size="sm" /><strong>{mapBrokerName(broker.broker)}</strong></span>
                     </td>
                     <td>
                       <span className="fee-badge">{formatCurrency(broker.trading_costs)}</span>
@@ -803,7 +804,7 @@ function App() {
                         <tbody>
                           {item.rows.map((row: any, rIdx: number) => (
                             <tr key={rIdx}>
-                              <td className="broker-name">{mapBrokerName(row.broker)}</td>
+                              <td className="broker-name"><span className="broker-name-with-logo"><BrokerLogo broker={row.broker} size="sm" />{mapBrokerName(row.broker)}</span></td>
                               {Object.entries(row).map(([key, val]: [string, any], cIdx: number) => {
                                 if (key !== 'broker' && key !== 'rating') {
                                   return <td key={cIdx}>{val}</td>;
@@ -966,7 +967,7 @@ function App() {
                         const activeEvidence = financialAnalysis.costEvidence?.activeTrader?.[simulation.broker];
                         return (
                           <tr key={simulation.broker}>
-                            <td className="broker-name">{mapBrokerName(simulation.broker)}</td>
+                            <td className="broker-name"><span className="broker-name-with-logo"><BrokerLogo broker={simulation.broker} size="sm" />{mapBrokerName(simulation.broker)}</span></td>
                             <td className="cost-cell passive-cost-wrapper">
                               <div className="cost-tooltip-trigger" data-tooltip={passiveEvidence || 'Cost breakdown'}>
                                 €{simulation.passiveInvestorCost}/year
@@ -997,7 +998,7 @@ function App() {
               }) || []).map((broker: any) => (
                 <div key={broker.broker} className="broker-card">
                   <div className="broker-header">
-                    <h3>{mapBrokerName(broker.broker)}</h3>
+                    <div className="broker-header-title"><BrokerLogo broker={broker.broker} size="lg" /><h3>{mapBrokerName(broker.broker)}</h3></div>
                     {broker.badges && (
                       <div className="broker-badges">
                         {broker.badges.map((badge: string, idx: number) => (
@@ -1087,22 +1088,22 @@ function App() {
               <div className="winners-list">
                 <div className="winner-card">
                   <h3>{t('analysis.bestForEtfs')}</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.etfs?.winner || t('table.na')}</p>
+                  <div className="winner-name-with-logo">{financialAnalysis.categoryWinners.etfs?.winner && <BrokerLogo broker={financialAnalysis.categoryWinners.etfs.winner} size="md" />}<p className="winner-name">{financialAnalysis.categoryWinners.etfs?.winner || t('table.na')}</p></div>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.etfs?.reason || ''}</p>
                 </div>
                 <div className="winner-card">
                   <h3>{t('analysis.bestForStocks')}</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.stocks?.winner || t('table.na')}</p>
+                  <div className="winner-name-with-logo">{financialAnalysis.categoryWinners.stocks?.winner && <BrokerLogo broker={financialAnalysis.categoryWinners.stocks.winner} size="md" />}<p className="winner-name">{financialAnalysis.categoryWinners.stocks?.winner || t('table.na')}</p></div>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.stocks?.reason || ''}</p>
                 </div>
                 <div className="winner-card">
                   <h3>{t('analysis.bestForBonds')}</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.bonds?.winner || t('table.na')}</p>
+                  <div className="winner-name-with-logo">{financialAnalysis.categoryWinners.bonds?.winner && <BrokerLogo broker={financialAnalysis.categoryWinners.bonds.winner} size="md" />}<p className="winner-name">{financialAnalysis.categoryWinners.bonds?.winner || t('table.na')}</p></div>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.bonds?.reason || ''}</p>
                 </div>
                 <div className="winner-card">
                   <h3>{t('analysis.bestForOverall')}</h3>
-                  <p className="winner-name">{financialAnalysis.categoryWinners.overall?.winner || t('table.na')}</p>
+                  <div className="winner-name-with-logo">{financialAnalysis.categoryWinners.overall?.winner && <BrokerLogo broker={financialAnalysis.categoryWinners.overall.winner} size="md" />}<p className="winner-name">{financialAnalysis.categoryWinners.overall?.winner || t('table.na')}</p></div>
                   <p className="winner-reason">{financialAnalysis.categoryWinners.overall?.reason || ''}</p>
                 </div>
               </div>
@@ -1126,7 +1127,7 @@ function App() {
                           const minCost = Math.min(...(financialAnalysis.costComparison?.passiveInvestor?.map(c => c.annualCost) || [Infinity]));
                           return (
                             <div key={idx} className={`cost-row ${cost.annualCost === minCost ? 'winner' : ''}`}>
-                              <span className="broker">{mapBrokerName(cost.broker)}</span>
+                              <span className="broker"><BrokerLogo broker={cost.broker} size="sm" />{mapBrokerName(cost.broker)}</span>
                               <span className="amount">€{cost.annualCost}/yr</span>
                             </div>
                           );
@@ -1147,7 +1148,7 @@ function App() {
                           const minCost = Math.min(...(financialAnalysis.costComparison?.activeTrader?.map(c => c.annualCost) || [Infinity]));
                           return (
                             <div key={idx} className={`cost-row ${cost.annualCost === minCost ? 'winner' : ''}`}>
-                              <span className="broker">{mapBrokerName(cost.broker)}</span>
+                              <span className="broker"><BrokerLogo broker={cost.broker} size="sm" />{mapBrokerName(cost.broker)}</span>
                               <span className="amount">€{cost.annualCost}/yr</span>
                             </div>
                           );
@@ -1168,7 +1169,7 @@ function App() {
                         return 0;
                       }).map((cost, idx) => (
                         <div key={idx} className={`cost-row ${cost.annualCost === 0 ? 'winner' : ''}`}>
-                          <span className="broker">{mapBrokerName(cost.broker)}</span>
+                          <span className="broker"><BrokerLogo broker={cost.broker} size="sm" />{mapBrokerName(cost.broker)}</span>
                           <span className="amount">€{cost.annualCost}/yr</span>
                         </div>
                       )) || []}
@@ -1194,7 +1195,7 @@ function App() {
                         }).map(c => c.annualCost) || [Infinity]));
                         return (
                           <div key={idx} className={`cost-row ${cost.annualCost === minCost ? 'winner' : ''}`}>
-                            <span className="broker">{mapBrokerName(cost.broker)}</span>
+                            <span className="broker"><BrokerLogo broker={cost.broker} size="sm" />{mapBrokerName(cost.broker)}</span>
                             <span className="amount">€{cost.annualCost}/yr</span>
                           </div>
                         );
@@ -1294,7 +1295,7 @@ function App() {
                     );
                   }}
                 >
-                  {mapBrokerName(broker)}
+                  <BrokerLogo broker={broker} size="sm" />{mapBrokerName(broker)}
                 </button>
               ))}
             </div>
@@ -1475,7 +1476,7 @@ function App() {
 
                       return (
                         <div key={broker} className="note-item-row">
-                          <div className="note-broker-name">{brokerName}</div>
+                          <div className="note-broker-name"><BrokerLogo broker={broker} size="sm" />{brokerName}</div>
                           <div className="note-text-content">
                             {typeof noteContent === "string" ? (
                               <p>{highlightCosts(noteContent)}</p>

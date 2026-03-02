@@ -476,6 +476,44 @@ main.page {
   color: var(--primary-color);
 }
 
+/* Broker Logo Integration */
+.broker-logo {
+  flex-shrink: 0;
+}
+
+.broker-name-with-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.broker-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.broker-header-title h3 {
+  margin: 0;
+}
+
+.winner-name-with-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.winner-name-with-logo .winner-name {
+  margin: 0;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .fee-badge {
   display: inline-flex;
   align-items: center;
@@ -1491,6 +1529,9 @@ main.page {
 }
 
 .cost-row .broker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -2572,6 +2613,9 @@ main.page {
 }
 
 .news-broker-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   background: #FFF5F0;
   color: var(--accent-color);
   font-size: 0.75rem;
@@ -2722,6 +2766,9 @@ main.page {
 }
 
 .note-broker-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 700;
   color: var(--accent-color);
   background-color: #FFF5F0;

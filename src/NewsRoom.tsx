@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NewsItem } from './types';
+import BrokerLogo from './BrokerLogo';
 
 interface NewsRoomProps {
     newsItems: NewsItem[];
@@ -115,7 +116,7 @@ const NewsRoom = ({ newsItems }: NewsRoomProps) => {
                     {filteredItems.map((item, idx) => (
                         <article key={idx} className="news-card">
                             <div className="news-card-header">
-                                <span className="news-broker-badge">{mapBrokerName(item.broker)}</span>
+                                <span className="news-broker-badge"><BrokerLogo broker={item.broker} size="sm" />{mapBrokerName(item.broker)}</span>
                                 {item.date && (
                                     <time className="news-date">
                                         {new Date(item.date).toLocaleDateString(currentLocale)}
