@@ -83,6 +83,9 @@
   "notes": {
     "title": "Informations importantes sur les courtiers"
   },
+  "methodology": {
+    "title": "Résumé des frais de courtage"
+  },
   "feeStructure": {
     "title": "Analyse de la structure tarifaire",
     "custodyFees": "Frais de garde",

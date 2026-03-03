@@ -2810,6 +2810,126 @@ main.page {
 }
 
 /* =============================================
+   STRUCTURED NOTE ITEMS (new array format)
+   ============================================= */
+
+.note-items-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.note-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+
+.note-item-advantage {
+  background-color: #f0fdf4;
+  border-left: 3px solid #22c55e;
+  color: #166534;
+}
+
+.note-item-warning {
+  background-color: #fff7ed;
+  border-left: 3px solid #f97316;
+  color: #9a3412;
+}
+
+.note-item-info {
+  background-color: #f8fafc;
+  border-left: 3px solid #94a3b8;
+  color: var(--text-secondary);
+}
+
+.note-item-label {
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.note-item-description {
+  flex: 1;
+}
+
+/* =============================================
+   METHODOLOGY SECTION
+   ============================================= */
+
+.methodology-section {
+  margin-top: 2.5rem;
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid #e5e7eb;
+}
+
+.methodology-section h2 {
+  font-size: 1.5rem;
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.methodology-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.methodology-card {
+  background: #f8fafc;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  border: 1px solid #e5e7eb;
+}
+
+.methodology-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  color: var(--primary-color);
+}
+
+.methodology-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.methodology-instrument {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.methodology-formula {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .methodology-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =============================================
    CHATBOT POPUP MODAL
    ============================================= */
 

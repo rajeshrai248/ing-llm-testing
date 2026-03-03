@@ -83,6 +83,9 @@
   "notes": {
     "title": "Belangrijke brokerinformatie"
   },
+  "methodology": {
+    "title": "Overzicht van de kosten"
+  },
   "feeStructure": {
     "title": "Analyse van de kostenstructuur",
     "custodyFees": "Bewaarkosten",

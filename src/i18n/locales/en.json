@@ -83,6 +83,9 @@
   "notes": {
     "title": "Important Broker Information"
   },
+  "methodology": {
+    "title": "Fee Calculation Summary"
+  },
   "feeStructure": {
     "title": "Fee Structure Analysis",
     "custodyFees": "Custody Fees",

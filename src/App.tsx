@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ANALYSIS_CACHE_KEY, NEWS_CACHE_KEY, COST_COMPARISON_ENDPOINT, FINANCIAL_ANALYSIS_ENDPOINT, REFRESH_ENDPOINT, STORAGE_KEY, NEWS_SCRAPE_ENDPOINT } from "./constants";
-import { BrokerRow, ComparisonTables, FinancialAnalysis, NewsResponse, PersonaBrokerResult, PersonaDefinition } from "./types";
+import { BrokerRow, ComparisonTables, FinancialAnalysis, NewsResponse, PersonaBrokerResult, PersonaDefinition, NoteItem } from "./types";
 import { makeApiRequest } from "./api";
 import NewsRoom from "./NewsRoom";
 import ChatBot from "./ChatBot";
@@ -98,15 +98,17 @@ function App() {
 
       if (costComparisonResponse && 'euronext_brussels' in costComparisonResponse) {
         const exchangeData = costComparisonResponse.euronext_brussels;
+        const personaComparisonFallback = (costComparisonResponse as any).persona_comparison;
         const processedData: ComparisonTables = {
           etfs: convertBrokerObjectToArray(exchangeData?.etfs),
           stocks: convertBrokerObjectToArray(exchangeData?.stocks),
           bonds: convertBrokerObjectToArray(exchangeData?.bonds),
           notes: exchangeData?.notes || {},
+          methodology: (exchangeData as any)?.methodology || {},
           calculation_logic: exchangeData?.calculation_logic || {},
           fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {},
-          investor_personas: exchangeData?.investor_personas || {},
-          persona_definitions: exchangeData?.persona_definitions || {},
+          investor_personas: exchangeData?.investor_personas || personaComparisonFallback?.investor_personas || {},
+          persona_definitions: exchangeData?.persona_definitions || personaComparisonFallback?.persona_definitions || {},
         };
         setComparisonTables(processedData);
         localStorage.setItem(storageKey, JSON.stringify({
@@ -245,15 +247,18 @@ function App() {
         // Check if response has euronext_brussels structure (new format)
         if ('euronext_brussels' in costComparisonResponse) {
           const exchangeData = costComparisonResponse.euronext_brussels;
+          // persona_comparison is a fallback key used by the warm cache path in /refresh-and-analyze
+          const personaComparison = (costComparisonResponse as any).persona_comparison;
           processedData = {
             etfs: convertBrokerObjectToArray(exchangeData?.etfs),
             stocks: convertBrokerObjectToArray(exchangeData?.stocks),
             bonds: convertBrokerObjectToArray(exchangeData?.bonds),
             notes: exchangeData?.notes || {},
+            methodology: (exchangeData as any)?.methodology || {},
             calculation_logic: exchangeData?.calculation_logic || {},
             fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {},
-            investor_personas: exchangeData?.investor_personas || {},
-            persona_definitions: exchangeData?.persona_definitions || {},
+            investor_personas: exchangeData?.investor_personas || personaComparison?.investor_personas || {},
+            persona_definitions: exchangeData?.persona_definitions || personaComparison?.persona_definitions || {},
           };
         } else {
           // Fallback to old format
@@ -262,6 +267,7 @@ function App() {
             stocks: convertBrokerObjectToArray(costComparisonResponse.stocks),
             bonds: convertBrokerObjectToArray(costComparisonResponse.bonds),
             notes: costComparisonResponse.notes || {},
+            methodology: (costComparisonResponse as any).methodology || {},
             calculation_logic: (costComparisonResponse as any).calculation_logic || {},
             fee_structure_analysis: (costComparisonResponse as any).fee_structure_analysis || {},
             investor_personas: (costComparisonResponse as any).investor_personas || {},
@@ -1472,13 +1478,21 @@ function App() {
                     })
                     .map(([broker, noteContent]) => {
                       const brokerName = mapBrokerName(broker);
-                      const noteText = typeof noteContent === "string" ? noteContent : "";
 
                       return (
                         <div key={broker} className="note-item-row">
                           <div className="note-broker-name"><BrokerLogo broker={broker} size="sm" />{brokerName}</div>
                           <div className="note-text-content">
-                            {typeof noteContent === "string" ? (
+                            {Array.isArray(noteContent) ? (
+                              <ul className="note-items-list">
+                                {(noteContent as NoteItem[]).map((item, idx) => (
+                                  <li key={idx} className={`note-item note-item-${item.highlight}`}>
+                                    <span className="note-item-label">{item.label}:</span>{' '}
+                                    <span className="note-item-description">{highlightCosts(item.description)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : typeof noteContent === "string" ? (
                               <p>{highlightCosts(noteContent)}</p>
                             ) : typeof noteContent === "object" && noteContent !== null ? (
                               <div>
@@ -1499,6 +1513,36 @@ function App() {
               </section>
             )}
           </section>
+
+          {comparisonTables.methodology && Object.keys(comparisonTables.methodology).length > 0 && (
+            <section className="methodology-section">
+              <h2>🧮 {t('methodology.title')}</h2>
+              <div className="methodology-grid">
+                {Object.entries(comparisonTables.methodology)
+                  .sort((a, b) => {
+                    if (a[0] === "ING Self Invest") return -1;
+                    if (b[0] === "ING Self Invest") return 1;
+                    return 0;
+                  })
+                  .map(([broker, instruments]) => (
+                    <div key={broker} className="methodology-card">
+                      <div className="methodology-card-header">
+                        <BrokerLogo broker={broker} size="sm" />
+                        <strong>{mapBrokerName(broker)}</strong>
+                      </div>
+                      <ul className="methodology-list">
+                        {Object.entries(instruments).map(([instrument, formula]) => (
+                          <li key={instrument}>
+                            <span className="methodology-instrument">{instrument.charAt(0).toUpperCase() + instrument.slice(1)}:</span>{' '}
+                            <span className="methodology-formula">{formula}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+              </div>
+            </section>
+          )}
 
           {comparisonTables.fee_structure_analysis && Object.keys(comparisonTables.fee_structure_analysis).length > 0 && (
             <section className="fee-structure-section">

@@ -140,6 +140,13 @@ export interface BrokerRow {
   [key: string]: string | number | null | Record<string, any>;
 }
 
+export interface NoteItem {
+  category: string;
+  label: string;
+  description: string;
+  highlight: 'advantage' | 'warning' | 'info';
+}
+
 export interface PersonaTradingDetail {
   instrument: string;
   amount: number;
@@ -175,7 +182,8 @@ export interface ComparisonTables {
   etfs: BrokerRow[];
   stocks: BrokerRow[];
   bonds: BrokerRow[];
-  notes?: Record<string, string>;
+  notes?: Record<string, string | NoteItem[]>;
+  methodology?: Record<string, Record<string, string>>;
   calculation_logic?: Record<string, Record<string, Record<string, string>>>;
   fee_structure_analysis?: Record<string, any>;
   investor_personas?: Record<string, PersonaBrokerResult[]>;
