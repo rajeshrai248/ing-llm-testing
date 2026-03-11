@@ -86,7 +86,7 @@ function App() {
           return null;
         }),
         makeApiRequest<FinancialAnalysis>(
-          `${FINANCIAL_ANALYSIS_ENDPOINT}?force=true`, {
+          `${FINANCIAL_ANALYSIS_ENDPOINT}`, {
             method: 'GET',
             timeout: 120000
           }
@@ -1479,13 +1479,24 @@ function App() {
                     .map(([broker, noteContent]) => {
                       const brokerName = mapBrokerName(broker);
 
+                      const isNonTrivial = (d: string) => {
+                        const lower = d.trim().toLowerCase();
+                        return lower !== 'free' && !lower.startsWith('no ') && lower !== '';
+                      };
+
+                      if (Array.isArray(noteContent) && (noteContent as NoteItem[]).filter(item => isNonTrivial(item.description)).length === 0) {
+                        return null;
+                      }
+
                       return (
                         <div key={broker} className="note-item-row">
                           <div className="note-broker-name"><BrokerLogo broker={broker} size="sm" />{brokerName}</div>
                           <div className="note-text-content">
                             {Array.isArray(noteContent) ? (
                               <ul className="note-items-list">
-                                {(noteContent as NoteItem[]).map((item, idx) => (
+                                {(noteContent as NoteItem[])
+                                  .filter(item => isNonTrivial(item.description))
+                                  .map((item, idx) => (
                                   <li key={idx} className={`note-item note-item-${item.highlight}`}>
                                     <span className="note-item-label">{item.label}:</span>{' '}
                                     <span className="note-item-description">{highlightCosts(item.description)}</span>
